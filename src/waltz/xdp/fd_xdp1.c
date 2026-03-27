@@ -180,6 +180,16 @@ fd_xdp_gen_program( ulong          code_buf[ 512 ],
   if( listen_ip4_addr!=0 ) {
     *(code++) = FD_EBPF( ldxw, r5, r2, 16                         );
     *(code++) = FD_EBPF( jne32_imm, r5, listen_ip4_addr, LBL_PASS );  // if ip4->daddr != listen_ip4_addr goto LBL_PASS
+  } else {
+    /* No specific IP filter: pass all class-D multicast packets (224.0.0.0/4)
+       directly to the kernel network stack so that tiles using raw sockets with
+       IP_ADD_MEMBERSHIP (e.g. shred_mcast) can receive them.
+       ip4->daddr is in network byte order; on little-endian x86-64, ldxw reads
+       224.0.0.0 as 0x000000E0.  Masking with 0xF0 yields 0xE0 for the entire
+       class-D range (224-239.x.x.x). */
+    *(code++) = FD_EBPF( ldxw,      r5, r2, 16          );  // r5 = ip4->daddr (NBO)
+    *(code++) = FD_EBPF( and64_imm, r5, 0xF0            );  // isolate high nibble of first byte (low 8 bits of NBO addr)
+    *(code++) = FD_EBPF( jeq_imm,   r5, 0xE0, LBL_PASS );  // class-D multicast (224-239.x.x.x) → XDP_PASS
   }
 
   /* Advance r2 to start of udp_hdr */

@@ -303,6 +303,8 @@ struct fd_topo_tile {
       ulong             fec_resolver_depth;
       char              identity_key_path[ PATH_MAX ];
       ushort            shred_listen_port;
+      ushort            shred_mcast_listen_port;
+      uint              shred_mcast_group_ip; /* network byte order; 0 = disabled */
       int               larger_shred_limits_per_block;
       ushort            expected_shred_version;
       ulong             adtl_dests_retransmit_cnt;

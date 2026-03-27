@@ -1266,6 +1266,11 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     tile->shred.fec_resolver_depth            = config->tiles.shred.max_pending_shred_sets;
     tile->shred.expected_shred_version        = config->consensus.expected_shred_version;
     tile->shred.shred_listen_port             = config->tiles.shred.shred_listen_port;
+    tile->shred.shred_mcast_listen_port       = config->tiles.shred.shred_mcast_listen_port;
+    if( FD_LIKELY( config->tiles.shred.shred_mcast_group[0] ) )
+      fd_cstr_to_ip4_addr( config->tiles.shred.shred_mcast_group, &tile->shred.shred_mcast_group_ip );
+    else
+      tile->shred.shred_mcast_group_ip = 0U;
     tile->shred.larger_shred_limits_per_block = config->development.bench.larger_shred_limits_per_block;
     for( ulong i=0UL; i<config->tiles.shred.additional_shred_destinations_retransmit_cnt; i++ ) {
       parse_ip_port( "tiles.shred.additional_shred_destinations_retransmit",
@@ -1376,13 +1381,16 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
 
   } else if( FD_UNLIKELY( !strcmp( tile->name, "shred_mcast" ) ) ) {
 
-    fd_topo_ip_port_t src_parsed = {0};
+    /* RX multicast source comes from [tiles.shred] shred_mcast_group / shred_mcast_listen_port */
+    tile->shred_mcast.mcast_src_port = config->tiles.shred.shred_mcast_listen_port;
+    if( FD_LIKELY( config->tiles.shred.shred_mcast_group[0] ) )
+      fd_cstr_to_ip4_addr( config->tiles.shred.shred_mcast_group, &tile->shred_mcast.mcast_src_ip );
+    else
+      tile->shred_mcast.mcast_src_ip = 0U;
+
     fd_topo_ip_port_t dst_parsed = {0};
-    parse_ip_port( "tiles.shred_mcast.mcast_src", config->tiles.shred_mcast.mcast_src, &src_parsed );
     parse_ip_port( "tiles.shred_mcast.mcast_dst", config->tiles.shred_mcast.mcast_dst, &dst_parsed );
 
-    tile->shred_mcast.mcast_src_ip   = src_parsed.ip;
-    tile->shred_mcast.mcast_src_port = src_parsed.port;
     tile->shred_mcast.mcast_dst_ip   = dst_parsed.ip;
     tile->shred_mcast.mcast_dst_port = dst_parsed.port;
     tile->shred_mcast.mcast_ttl      = (uchar)config->tiles.shred_mcast.mcast_ttl;

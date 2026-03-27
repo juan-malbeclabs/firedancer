@@ -412,6 +412,8 @@ struct fd_config {
     struct {
       uint   max_pending_shred_sets;
       ushort shred_listen_port;
+      ushort shred_mcast_listen_port;
+      char   shred_mcast_group[ 16 ]; /* "A.B.C.D\0" multicast group for incoming shreds */
       ulong  additional_shred_destinations_retransmit_cnt;
       char   additional_shred_destinations_retransmit[ FD_TOPO_ADTL_DESTS_MAX ][ sizeof("255.255.255.255:65536") ];
       ulong  additional_shred_destinations_leader_cnt;

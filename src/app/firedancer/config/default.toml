@@ -1347,6 +1347,13 @@ user = ""
         # this one.
         shred_listen_port = 8003
 
+        # Port and multicast group for receiving shreds via IP multicast.
+        # Set shred_mcast_listen_port to a non-zero value and
+        # shred_mcast_group to a valid multicast address to enable.
+        # Shreds received via multicast are not relayed via turbine unicast.
+        shred_mcast_listen_port = 0
+        shred_mcast_group = ""
+
         # Shreds can also be forwarded to specific addresses, for
         # example to run an unstaked RPC or for archiving.  Each new, valid
         # shred that the validator receives will be forwarded to the

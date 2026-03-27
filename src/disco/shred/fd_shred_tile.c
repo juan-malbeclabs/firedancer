@@ -950,8 +950,9 @@ after_frag( fd_shred_ctx_t *    ctx,
     }
 
     if( (rv==FD_FEC_RESOLVER_SHRED_OKAY) | (rv==FD_FEC_RESOLVER_SHRED_COMPLETES) ) {
-      if( FD_LIKELY( fd_disco_netmux_sig_proto( sig ) != DST_PROTO_REPAIR ) ) {
-        /* Relay this shred */
+      if( FD_LIKELY( fd_disco_netmux_sig_proto( sig ) != DST_PROTO_REPAIR ) &&
+          FD_LIKELY( !ctx->in_is_mcast[ in_idx ] ) ) {
+        /* Relay this shred — skip for repair responses and mcast-sourced shreds */
         ulong max_dest_cnt[1];
         do {
           /* If we've validated the shred and it COMPLETES but we can't

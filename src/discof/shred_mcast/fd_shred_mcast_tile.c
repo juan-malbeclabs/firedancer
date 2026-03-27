@@ -33,12 +33,22 @@ typedef struct {
     uchar code_seen[ FD_SHRED_MCAST_SEEN_BYTES ];
   } dedup[ FD_SHRED_MCAST_DEDUP_SLOT_CNT ];
 
-  /* Input link workspaces — one entry per upstream shred_mcast link */
+  /* Input link workspaces — one entry per upstream shred_mcast link (shred → shred_mcast) */
   struct {
     fd_wksp_t * mem;
     ulong       chunk0;
     ulong       wmark;
   } in[ FD_TOPO_MAX_TILE_IN_LINKS ];
+
+  /* Output link workspaces — one entry per downstream mcast_shred link (shred_mcast → shred) */
+  struct {
+    fd_wksp_t * mem;
+    ulong       chunk0;
+    ulong       wmark;
+    ulong       chunk;
+    ulong       out_idx; /* index in tile->out_link_id[] for fd_stem_publish */
+  } out[ FD_TOPO_MAX_TILE_IN_LINKS ];
+  ulong shred_tile_cnt;
 
   /* Multicast RX socket (joined to the source multicast group) */
   int mcast_rx_sock;
@@ -207,13 +217,27 @@ unprivileged_init( fd_topo_t *      topo,
   for( ulong i=0UL; i<FD_SHRED_MCAST_DEDUP_SLOT_CNT; i++ )
     ctx->dedup[ i ].slot = ULONG_MAX;
 
-  /* Set up input link workspaces */
+  /* Set up input link workspaces (shred → shred_mcast) */
   for( ulong i=0UL; i<tile->in_cnt; i++ ) {
     fd_topo_link_t * link = &topo->links[ tile->in_link_id[ i ] ];
     fd_topo_wksp_t * wksp = &topo->workspaces[ topo->objs[ link->dcache_obj_id ].wksp_id ];
     ctx->in[ i ].mem    = wksp->wksp;
     ctx->in[ i ].chunk0 = fd_dcache_compact_chunk0( ctx->in[ i ].mem, link->dcache );
     ctx->in[ i ].wmark  = fd_dcache_compact_wmark ( ctx->in[ i ].mem, link->dcache, link->mtu );
+  }
+
+  /* Set up output link workspaces (shred_mcast → shred, one per shred tile) */
+  ctx->shred_tile_cnt = 0UL;
+  for( ulong i=0UL; i<tile->out_cnt; i++ ) {
+    fd_topo_link_t * link = &topo->links[ tile->out_link_id[ i ] ];
+    if( strcmp( link->name, "mcast_shred" ) ) continue;
+    ulong j = ctx->shred_tile_cnt++;
+    fd_topo_wksp_t * wksp = &topo->workspaces[ topo->objs[ link->dcache_obj_id ].wksp_id ];
+    ctx->out[ j ].mem     = wksp->wksp;
+    ctx->out[ j ].chunk0  = fd_dcache_compact_chunk0( ctx->out[ j ].mem, link->dcache );
+    ctx->out[ j ].wmark   = fd_dcache_compact_wmark ( ctx->out[ j ].mem, link->dcache, link->mtu );
+    ctx->out[ j ].chunk   = ctx->out[ j ].chunk0;
+    ctx->out[ j ].out_idx = i;
   }
 
   /* Copy socket FDs and destination address from tile config */
@@ -233,7 +257,7 @@ unprivileged_init( fd_topo_t *      topo,
    For each new shred, deduplicates and forwards to the TX socket. */
 static void
 before_credit( fd_shred_mcast_ctx_t * ctx,
-               fd_stem_context_t *    stem FD_PARAM_UNUSED,
+               fd_stem_context_t *    stem,
                int *                  charge_busy ) {
   /* Declare static arrays to avoid large stack frames */
   static struct mmsghdr msgs[ FD_SHRED_MCAST_RX_BURST ];
@@ -277,6 +301,22 @@ before_credit( fd_shred_mcast_ctx_t * ctx,
 
     ctx->metrics.rx_mcast++;
     ctx->metrics.tx_mcast++;
+
+    /* Forward to the appropriate shred tile via stem (round-robin by sig) */
+    if( FD_LIKELY( ctx->shred_tile_cnt > 0UL ) ) {
+      ulong shred_sig = fd_ulong_load_8( shred->signature );
+      ulong tile_idx  = shred_sig % ctx->shred_tile_cnt;
+      uchar * dst = fd_chunk_to_laddr( ctx->out[ tile_idx ].mem, ctx->out[ tile_idx ].chunk );
+      fd_memcpy( dst, raw, raw_sz );
+      ulong out_sig = fd_disco_shred_out_shred_sig( 0, shred->slot, shred->fec_set_idx,
+                                                     is_code, shred->idx );
+      ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
+      fd_stem_publish( stem, ctx->out[ tile_idx ].out_idx, out_sig,
+                       ctx->out[ tile_idx ].chunk, raw_sz, 0UL, tspub, tspub );
+      ctx->out[ tile_idx ].chunk = fd_dcache_compact_next( ctx->out[ tile_idx ].chunk, raw_sz,
+                                                            ctx->out[ tile_idx ].chunk0,
+                                                            ctx->out[ tile_idx ].wmark );
+    }
   }
 }
 
@@ -338,7 +378,7 @@ metrics_write( fd_shred_mcast_ctx_t * ctx ) {
   FD_MCNT_SET( SHRED_MCAST, PARSE_FAILED,       ctx->metrics.parse_failed  );
 }
 
-#define STEM_BURST (1UL)
+#define STEM_BURST (FD_SHRED_MCAST_RX_BURST)
 
 #define STEM_CALLBACK_CONTEXT_TYPE   fd_shred_mcast_ctx_t
 #define STEM_CALLBACK_CONTEXT_ALIGN  alignof(fd_shred_mcast_ctx_t)

@@ -96,6 +96,7 @@
 #define IN_KIND_REPAIR  (5UL)
 #define IN_KIND_IPECHO  (6UL)
 #define IN_KIND_GOSSIP  (7UL)
+#define IN_KIND_MCAST   (8UL)
 
 #define NET_OUT_IDX     1
 #define SIGN_OUT_IDX    2
@@ -690,6 +691,18 @@ during_frag( fd_shred_ctx_t * ctx,
         ctx->pending_batch.txn_cnt        = microblock->txn_cnt;
       }
     }
+  } else if( FD_UNLIKELY( ctx->in_kind[ in_idx ]==IN_KIND_MCAST ) ) {
+    /* Raw shred bytes from the shred_mcast tile (no ethernet/IP/UDP headers).
+       Same layout as IN_KIND_REPAIR.  The FEC resolver call happens in after_frag,
+       same path as IN_KIND_NET but with relay and mcast-out suppressed. */
+    if( FD_UNLIKELY( chunk<ctx->in[ in_idx ].chunk0 || chunk>ctx->in[ in_idx ].wmark ) )
+      FD_LOG_ERR(( "mcast_shred chunk %lu %lu corrupt, not in range [%lu,%lu]", chunk, sz,
+                   ctx->in[ in_idx ].chunk0, ctx->in[ in_idx ].wmark ));
+    uchar const * dcache_entry = fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk );
+    fd_memcpy( ctx->shred_buffer, dcache_entry, sz );
+    ctx->shred_buffer_sz = sz;
+    ctx->metrics->mcast_rcv_cnt++;
+    ctx->metrics->mcast_rcv_bytes += sz;
   } else if( FD_UNLIKELY( ctx->in_kind[ in_idx ]==IN_KIND_NET ) ) {
     /* The common case, from the net tile.  The FEC resolver API does
        not present a prepare/commit model. If we get overrun between
@@ -906,7 +919,7 @@ after_frag( fd_shred_ctx_t *    ctx,
 
   ulong fanout = 200UL; /* Default Agave's DATA_PLANE_FANOUT = 200UL */
 
-  if( FD_LIKELY( ctx->in_kind[ in_idx ]==IN_KIND_NET ) ) {
+  if( FD_LIKELY( ctx->in_kind[ in_idx ]==IN_KIND_NET || ctx->in_kind[ in_idx ]==IN_KIND_MCAST ) ) {
     uchar * shred_buffer    = ctx->shred_buffer;
     ulong   shred_buffer_sz = ctx->shred_buffer_sz;
 
@@ -920,7 +933,10 @@ after_frag( fd_shred_ctx_t *    ctx,
     fd_pubkey_t const * slot_leader = fd_epoch_leaders_get( lsched, shred->slot );
     if( FD_UNLIKELY( !slot_leader ) ) { ctx->metrics->shred_processing_result[ 0 ]++; return; } /* Count this as bad slot too */
 
-    uint nonce = fd_disco_netmux_sig_proto( sig ) == DST_PROTO_SHRED ? UINT_MAX : FD_LOAD(uint, shred_buffer + fd_shred_sz( shred ) );
+    /* mcast shreds arrive without a repair nonce — treat same as normal turbine shreds */
+    uint nonce = ( ctx->in_kind[ in_idx ]==IN_KIND_MCAST ||
+                   fd_disco_netmux_sig_proto( sig ) == DST_PROTO_SHRED ) ? UINT_MAX
+                 : FD_LOAD( uint, shred_buffer + fd_shred_sz( shred ) );
 
     fd_fec_set_t const * out_fec_set[1];
     fd_shred_t const   * out_shred[1];
@@ -969,8 +985,9 @@ after_frag( fd_shred_ctx_t *    ctx,
         } while( 0 );
       }
 
-      /* Forward raw shred bytes to the mcast tile (optional, Firedancer-only) */
-      if( FD_UNLIKELY( ctx->mcast_out_idx!=ULONG_MAX ) ) {
+      /* Forward raw shred bytes to the mcast tile (optional, Firedancer-only).
+         Skip for mcast-sourced shreds to avoid a feedback loop. */
+      if( FD_UNLIKELY( ctx->mcast_out_idx!=ULONG_MAX && !ctx->in_is_mcast[ in_idx ] ) ) {
         ulong shred_sz = fd_shred_sz( *out_shred );
         uchar * dst = fd_chunk_to_laddr( ctx->mcast_out_mem, ctx->mcast_out_chunk );
         fd_memcpy( dst, *out_shred, shred_sz );
@@ -1460,6 +1477,10 @@ unprivileged_init( fd_topo_t *      topo,
     else if( FD_LIKELY( !strcmp( link->name, "gossip_out"   ) ) ) { ctx->in_kind[ polled_i ] = IN_KIND_GOSSIP;
       if( FD_UNLIKELY( has_contact_info_in ) ) FD_LOG_ERR(( "shred tile has multiple contact info in link types, can only be either gossip_out or crds_shred" ));
       has_contact_info_in = 1;
+    }
+    else if( FD_LIKELY( !strcmp( link->name, "mcast_shred"  ) ) ) {
+      ctx->in_kind    [ polled_i ] = IN_KIND_MCAST;
+      ctx->in_is_mcast[ polled_i ] = 1;
     }
 
     else FD_LOG_ERR(( "shred tile has unexpected input link %lu %s", i, link->name ));

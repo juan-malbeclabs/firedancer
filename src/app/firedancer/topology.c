@@ -789,14 +789,21 @@ fd_topo_initialize( config_t * config ) {
 
   if( FD_UNLIKELY( config->tiles.shred_mcast.enabled ) ) {
     fd_topob_wksp( topo, "shred_mcast" );
+    fd_topob_wksp( topo, "mcast_shred" );
 
-    /* One shred_mcast link per shred tile — each carries raw shred bytes */
+    /* One shred_mcast link per shred tile — each carries raw shred bytes (shred → shred_mcast) */
     FOR(shred_tile_cnt) fd_topob_link( topo, "shred_mcast", "shred_mcast", 1024UL, FD_SHRED_MAX_SZ, 1UL );
+
+    /* One mcast_shred link per shred tile — shred_mcast forwards mcast-received shreds back to each shred tile */
+    FOR(shred_tile_cnt) fd_topob_link( topo, "mcast_shred", "mcast_shred", 1024UL, FD_SHRED_MAX_SZ, 1UL );
 
     fd_topob_tile( topo, "shred_mcast", "shred_mcast", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 );
 
-    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred", i, "shred_mcast", i );
+    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred",      i,    "shred_mcast", i );
     FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "shred_mcast", 0UL, "metric_in", "shred_mcast", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+
+    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred_mcast", 0UL, "mcast_shred", i );
+    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "shred",       i,   "metric_in", "mcast_shred", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
   }
 
   fd_topob_wksp( topo, "exec_replay" );

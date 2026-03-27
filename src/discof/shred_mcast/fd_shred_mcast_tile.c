@@ -50,14 +50,14 @@ typedef struct {
   } out[ FD_TOPO_MAX_TILE_IN_LINKS ];
   ulong shred_tile_cnt;
 
-  /* Multicast RX socket (joined to the source multicast group) */
-  int mcast_rx_sock;
+  /* Multicast RX sockets — one per source group (may have different ports) */
+  int                mcast_rx_socks[ FD_SHRED_MCAST_SRC_MAX ];
+  ulong              mcast_rx_cnt;
 
-  /* Multicast TX socket (for forwarding to the destination group) */
-  int mcast_tx_sock;
-
-  /* Destination address for TX sendto() */
-  struct sockaddr_in mcast_dst_addr;
+  /* Multicast TX socket — single socket, sendto() repeated per destination */
+  int                mcast_tx_sock;
+  struct sockaddr_in mcast_dst_addrs[ FD_SHRED_MCAST_DST_MAX ];
+  ulong              mcast_dst_cnt;
 
   /* Work buffer for a fragment received from the shred tile link */
   uchar pkt_buf[ FD_SHRED_MAX_SZ ];
@@ -123,10 +123,19 @@ populate_allowed_seccomp( fd_topo_t const *      topo  FD_PARAM_UNUSED,
                            fd_topo_tile_t const * tile,
                            ulong                  out_cnt,
                            struct sock_filter *   out ) {
+  /* Pass all 8 RX socket slots; unused slots hold -1 (==UINT_MAX as uint,
+     which never matches a real fd in the BPF filter). */
   populate_sock_filter_policy_fd_shred_mcast_tile(
       out_cnt, out,
       (uint)fd_log_private_logfile_fd(),
-      (uint)tile->shred_mcast.mcast_rx_sock,
+      (uint)tile->shred_mcast.mcast_rx_socks[0],
+      (uint)tile->shred_mcast.mcast_rx_socks[1],
+      (uint)tile->shred_mcast.mcast_rx_socks[2],
+      (uint)tile->shred_mcast.mcast_rx_socks[3],
+      (uint)tile->shred_mcast.mcast_rx_socks[4],
+      (uint)tile->shred_mcast.mcast_rx_socks[5],
+      (uint)tile->shred_mcast.mcast_rx_socks[6],
+      (uint)tile->shred_mcast.mcast_rx_socks[7],
       (uint)tile->shred_mcast.mcast_tx_sock );
   return sock_filter_policy_fd_shred_mcast_tile_instr_cnt;
 }
@@ -140,7 +149,9 @@ populate_allowed_fds( fd_topo_t const *      topo       FD_PARAM_UNUSED,
   out_fds[ out_cnt++ ] = 2; /* stderr */
   if( FD_LIKELY( -1 != fd_log_private_logfile_fd() ) )
     out_fds[ out_cnt++ ] = fd_log_private_logfile_fd();
-  out_fds[ out_cnt++ ] = tile->shred_mcast.mcast_rx_sock;
+  for( ulong i=0UL; i<FD_SHRED_MCAST_SRC_MAX; i++ )
+    if( FD_LIKELY( tile->shred_mcast.mcast_rx_socks[ i ] != -1 ) )
+      out_fds[ out_cnt++ ] = tile->shred_mcast.mcast_rx_socks[ i ];
   out_fds[ out_cnt++ ] = tile->shred_mcast.mcast_tx_sock;
   return out_cnt;
 }
@@ -149,41 +160,49 @@ static void
 privileged_init( fd_topo_t *      topo  FD_PARAM_UNUSED,
                   fd_topo_tile_t * tile ) {
 
-  /* --- RX socket: join source multicast group --- */
-  int rx_sock = socket( AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, IPPROTO_UDP );
-  if( FD_UNLIKELY( rx_sock < 0 ) )
-    FD_LOG_ERR(( "shred_mcast: socket(RX) failed (%d-%s)", errno, fd_io_strerror( errno ) ));
+  /* Initialize all RX socket slots to -1 (unused) */
+  for( ulong i=0UL; i<FD_SHRED_MCAST_SRC_MAX; i++ )
+    tile->shred_mcast.mcast_rx_socks[ i ] = -1;
 
-  int reuse = 1;
-  if( FD_UNLIKELY( setsockopt( rx_sock, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse) ) ) )
-    FD_LOG_ERR(( "shred_mcast: setsockopt(SO_REUSEPORT) failed (%d-%s)", errno, fd_io_strerror( errno ) ));
+  /* --- RX sockets: one per source group (may have different ports) --- */
+  ulong src_cnt = tile->shred_mcast.mcast_src_cnt;
+  for( ulong i=0UL; i<src_cnt; i++ ) {
+    int rx_sock = socket( AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, IPPROTO_UDP );
+    if( FD_UNLIKELY( rx_sock < 0 ) )
+      FD_LOG_ERR(( "shred_mcast: socket(RX[%lu]) failed (%d-%s)", i, errno, fd_io_strerror( errno ) ));
 
-  int rcvbuf = 1<<20; /* 1 MiB */
-  (void)setsockopt( rx_sock, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf) );
+    int reuse = 1;
+    if( FD_UNLIKELY( setsockopt( rx_sock, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse) ) ) )
+      FD_LOG_ERR(( "shred_mcast: setsockopt(SO_REUSEPORT,[%lu]) failed (%d-%s)", i, errno, fd_io_strerror( errno ) ));
 
-  struct sockaddr_in bind_addr = {
-    .sin_family      = AF_INET,
-    .sin_addr.s_addr = INADDR_ANY,
-    .sin_port        = fd_ushort_bswap( tile->shred_mcast.mcast_src_port ),
-  };
-  if( FD_UNLIKELY( bind( rx_sock, fd_type_pun_const( &bind_addr ), sizeof(bind_addr) ) ) )
-    FD_LOG_ERR(( "shred_mcast: bind(RX) failed (%d-%s)", errno, fd_io_strerror( errno ) ));
+    int rcvbuf = 1<<20; /* 1 MiB */
+    (void)setsockopt( rx_sock, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf) );
 
-  struct ip_mreq mreq = {
-    .imr_multiaddr.s_addr = tile->shred_mcast.mcast_src_ip,
-    .imr_interface.s_addr = INADDR_ANY,
-  };
-  if( FD_UNLIKELY( setsockopt( rx_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq) ) ) )
-    FD_LOG_ERR(( "shred_mcast: IP_ADD_MEMBERSHIP failed (%d-%s)", errno, fd_io_strerror( errno ) ));
+    struct sockaddr_in bind_addr = {
+      .sin_family      = AF_INET,
+      .sin_addr.s_addr = INADDR_ANY,
+      .sin_port        = fd_ushort_bswap( tile->shred_mcast.mcast_src_ports[ i ] ),
+    };
+    if( FD_UNLIKELY( bind( rx_sock, fd_type_pun_const( &bind_addr ), sizeof(bind_addr) ) ) )
+      FD_LOG_ERR(( "shred_mcast: bind(RX[%lu]) failed (%d-%s)", i, errno, fd_io_strerror( errno ) ));
 
-  FD_LOG_NOTICE(( "shred_mcast: joined multicast group %u.%u.%u.%u:%u (rx_sock=%d)",
-                  (tile->shred_mcast.mcast_src_ip      ) & 0xFF,
-                  (tile->shred_mcast.mcast_src_ip >>  8) & 0xFF,
-                  (tile->shred_mcast.mcast_src_ip >> 16) & 0xFF,
-                  (tile->shred_mcast.mcast_src_ip >> 24) & 0xFF,
-                  tile->shred_mcast.mcast_src_port, rx_sock ));
+    struct ip_mreq mreq = {
+      .imr_multiaddr.s_addr = tile->shred_mcast.mcast_src_ips[ i ],
+      .imr_interface.s_addr = INADDR_ANY,
+    };
+    if( FD_UNLIKELY( setsockopt( rx_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq) ) ) )
+      FD_LOG_ERR(( "shred_mcast: IP_ADD_MEMBERSHIP[%lu] failed (%d-%s)", i, errno, fd_io_strerror( errno ) ));
 
-  /* --- TX socket: for sending to destination multicast group --- */
+    uint ip = tile->shred_mcast.mcast_src_ips[ i ];
+    FD_LOG_NOTICE(( "shred_mcast: joined multicast group %u.%u.%u.%u:%u (rx_sock=%d)",
+                    (ip      ) & 0xFF, (ip >>  8) & 0xFF,
+                    (ip >> 16) & 0xFF, (ip >> 24) & 0xFF,
+                    tile->shred_mcast.mcast_src_ports[ i ], rx_sock ));
+
+    tile->shred_mcast.mcast_rx_socks[ i ] = rx_sock;
+  }
+
+  /* --- TX socket: single socket, sendto() repeated per destination --- */
   int tx_sock = socket( AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, IPPROTO_UDP );
   if( FD_UNLIKELY( tx_sock < 0 ) )
     FD_LOG_ERR(( "shred_mcast: socket(TX) failed (%d-%s)", errno, fd_io_strerror( errno ) ));
@@ -192,14 +211,9 @@ privileged_init( fd_topo_t *      topo  FD_PARAM_UNUSED,
   if( FD_UNLIKELY( setsockopt( tx_sock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl) ) ) )
     FD_LOG_ERR(( "shred_mcast: setsockopt(IP_MULTICAST_TTL) failed (%d-%s)", errno, fd_io_strerror( errno ) ));
 
-  FD_LOG_NOTICE(( "shred_mcast: TX socket ready, dst %u.%u.%u.%u:%u (tx_sock=%d, ttl=%u)",
-                  (tile->shred_mcast.mcast_dst_ip      ) & 0xFF,
-                  (tile->shred_mcast.mcast_dst_ip >>  8) & 0xFF,
-                  (tile->shred_mcast.mcast_dst_ip >> 16) & 0xFF,
-                  (tile->shred_mcast.mcast_dst_ip >> 24) & 0xFF,
-                  tile->shred_mcast.mcast_dst_port, tx_sock, ttl ));
+  FD_LOG_NOTICE(( "shred_mcast: TX socket ready tx_sock=%d ttl=%u dst_cnt=%lu",
+                  tx_sock, ttl, tile->shred_mcast.mcast_dst_cnt ));
 
-  tile->shred_mcast.mcast_rx_sock = rx_sock;
   tile->shred_mcast.mcast_tx_sock = tx_sock;
 }
 
@@ -240,16 +254,21 @@ unprivileged_init( fd_topo_t *      topo,
     ctx->out[ j ].out_idx = i;
   }
 
-  /* Copy socket FDs and destination address from tile config */
-  ctx->mcast_rx_sock = tile->shred_mcast.mcast_rx_sock;
+  /* Copy socket FDs and destination addresses from tile config */
+  ctx->mcast_rx_cnt = tile->shred_mcast.mcast_src_cnt;
+  for( ulong i=0UL; i<FD_SHRED_MCAST_SRC_MAX; i++ )
+    ctx->mcast_rx_socks[ i ] = tile->shred_mcast.mcast_rx_socks[ i ];
   ctx->mcast_tx_sock = tile->shred_mcast.mcast_tx_sock;
 
-  ctx->mcast_dst_addr.sin_family      = AF_INET;
-  ctx->mcast_dst_addr.sin_addr.s_addr = tile->shred_mcast.mcast_dst_ip;
-  ctx->mcast_dst_addr.sin_port        = fd_ushort_bswap( tile->shred_mcast.mcast_dst_port );
+  ctx->mcast_dst_cnt = tile->shred_mcast.mcast_dst_cnt;
+  for( ulong i=0UL; i<tile->shred_mcast.mcast_dst_cnt; i++ ) {
+    ctx->mcast_dst_addrs[ i ].sin_family      = AF_INET;
+    ctx->mcast_dst_addrs[ i ].sin_addr.s_addr = tile->shred_mcast.mcast_dst_ips[ i ];
+    ctx->mcast_dst_addrs[ i ].sin_port        = fd_ushort_bswap( tile->shred_mcast.mcast_dst_ports[ i ] );
+  }
 
-  FD_LOG_NOTICE(( "shred_mcast: tile initialized, in_cnt=%lu rx_sock=%d tx_sock=%d",
-                  tile->in_cnt, ctx->mcast_rx_sock, ctx->mcast_tx_sock ));
+  FD_LOG_NOTICE(( "shred_mcast: tile initialized, in_cnt=%lu src_cnt=%lu dst_cnt=%lu tx_sock=%d",
+                  tile->in_cnt, ctx->mcast_rx_cnt, ctx->mcast_dst_cnt, ctx->mcast_tx_sock ));
 }
 
 /* before_credit: poll the multicast RX socket for incoming shreds from
@@ -275,47 +294,54 @@ before_credit( fd_shred_mcast_ctx_t * ctx,
     msgs[ i ].msg_hdr.msg_controllen= 0;
   }
 
-  int cnt = recvmmsg( ctx->mcast_rx_sock, msgs, FD_SHRED_MCAST_RX_BURST, MSG_DONTWAIT, NULL );
-  if( FD_LIKELY( cnt <= 0 ) ) return;
+  for( ulong s=0UL; s<ctx->mcast_rx_cnt; s++ ) {
+    int rx_sock = ctx->mcast_rx_socks[ s ];
+    if( FD_UNLIKELY( rx_sock < 0 ) ) continue;
 
-  *charge_busy = 1;
+    int cnt = recvmmsg( rx_sock, msgs, FD_SHRED_MCAST_RX_BURST, MSG_DONTWAIT, NULL );
+    if( FD_LIKELY( cnt <= 0 ) ) continue;
 
-  for( int i=0; i<cnt; i++ ) {
-    uchar const * raw    = bufs[ i ];
-    ulong         raw_sz = msgs[ i ].msg_len;
+    *charge_busy = 1;
 
-    fd_shred_t const * shred = fd_shred_parse( raw, raw_sz );
-    if( FD_UNLIKELY( !shred ) ) { ctx->metrics.parse_failed++; continue; }
+    for( int i=0; i<cnt; i++ ) {
+      uchar const * raw    = bufs[ i ];
+      ulong         raw_sz = msgs[ i ].msg_len;
 
-    int   is_code  = fd_shred_is_code( fd_shred_type( shred->variant ) );
-    ulong global_i = (ulong)shred->fec_set_idx + (ulong)shred->idx;
+      fd_shred_t const * shred = fd_shred_parse( raw, raw_sz );
+      if( FD_UNLIKELY( !shred ) ) { ctx->metrics.parse_failed++; continue; }
 
-    if( dedup_check_and_set( ctx, shred->slot, is_code, global_i ) ) {
-      ctx->metrics.dedup_skipped++;
-      continue;
-    }
+      int   is_code  = fd_shred_is_code( fd_shred_type( shred->variant ) );
+      ulong global_i = (ulong)shred->fec_set_idx + (ulong)shred->idx;
 
-    if( FD_UNLIKELY( sendto( ctx->mcast_tx_sock, raw, raw_sz, 0,
-                              fd_type_pun_const( &ctx->mcast_dst_addr ),
-                              sizeof(ctx->mcast_dst_addr) ) < 0 ) ) continue;
+      if( dedup_check_and_set( ctx, shred->slot, is_code, global_i ) ) {
+        ctx->metrics.dedup_skipped++;
+        continue;
+      }
 
-    ctx->metrics.rx_mcast++;
-    ctx->metrics.tx_mcast++;
+      for( ulong d=0UL; d<ctx->mcast_dst_cnt; d++ ) {
+        (void)sendto( ctx->mcast_tx_sock, raw, raw_sz, 0,
+                      fd_type_pun_const( &ctx->mcast_dst_addrs[ d ] ),
+                      sizeof(ctx->mcast_dst_addrs[ d ]) );
+      }
 
-    /* Forward to the appropriate shred tile via stem (round-robin by sig) */
-    if( FD_LIKELY( ctx->shred_tile_cnt > 0UL ) ) {
-      ulong shred_sig = fd_ulong_load_8( shred->signature );
-      ulong tile_idx  = shred_sig % ctx->shred_tile_cnt;
-      uchar * dst = fd_chunk_to_laddr( ctx->out[ tile_idx ].mem, ctx->out[ tile_idx ].chunk );
-      fd_memcpy( dst, raw, raw_sz );
-      ulong out_sig = fd_disco_shred_out_shred_sig( 0, shred->slot, shred->fec_set_idx,
-                                                     is_code, shred->idx );
-      ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
-      fd_stem_publish( stem, ctx->out[ tile_idx ].out_idx, out_sig,
-                       ctx->out[ tile_idx ].chunk, raw_sz, 0UL, tspub, tspub );
-      ctx->out[ tile_idx ].chunk = fd_dcache_compact_next( ctx->out[ tile_idx ].chunk, raw_sz,
-                                                            ctx->out[ tile_idx ].chunk0,
-                                                            ctx->out[ tile_idx ].wmark );
+      ctx->metrics.rx_mcast++;
+      ctx->metrics.tx_mcast += ctx->mcast_dst_cnt;
+
+      /* Forward to the appropriate shred tile via stem (round-robin by sig) */
+      if( FD_LIKELY( ctx->shred_tile_cnt > 0UL ) ) {
+        ulong shred_sig = fd_ulong_load_8( shred->signature );
+        ulong tile_idx  = shred_sig % ctx->shred_tile_cnt;
+        uchar * dst = fd_chunk_to_laddr( ctx->out[ tile_idx ].mem, ctx->out[ tile_idx ].chunk );
+        fd_memcpy( dst, raw, raw_sz );
+        ulong out_sig = fd_disco_shred_out_shred_sig( 0, shred->slot, shred->fec_set_idx,
+                                                       is_code, shred->idx );
+        ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
+        fd_stem_publish( stem, ctx->out[ tile_idx ].out_idx, out_sig,
+                         ctx->out[ tile_idx ].chunk, raw_sz, 0UL, tspub, tspub );
+        ctx->out[ tile_idx ].chunk = fd_dcache_compact_next( ctx->out[ tile_idx ].chunk, raw_sz,
+                                                              ctx->out[ tile_idx ].chunk0,
+                                                              ctx->out[ tile_idx ].wmark );
+      }
     }
   }
 }
@@ -361,12 +387,14 @@ after_frag( fd_shred_mcast_ctx_t * ctx,
     return;
   }
 
-  if( FD_UNLIKELY( sendto( ctx->mcast_tx_sock, ctx->pkt_buf, ctx->pkt_sz, 0,
-                            fd_type_pun_const( &ctx->mcast_dst_addr ),
-                            sizeof(ctx->mcast_dst_addr) ) < 0 ) ) return;
+  for( ulong d=0UL; d<ctx->mcast_dst_cnt; d++ ) {
+    (void)sendto( ctx->mcast_tx_sock, ctx->pkt_buf, ctx->pkt_sz, 0,
+                  fd_type_pun_const( &ctx->mcast_dst_addrs[ d ] ),
+                  sizeof(ctx->mcast_dst_addrs[ d ]) );
+  }
 
   ctx->metrics.rx_turbine++;
-  ctx->metrics.tx_mcast++;
+  ctx->metrics.tx_mcast += ctx->mcast_dst_cnt;
 }
 
 static void

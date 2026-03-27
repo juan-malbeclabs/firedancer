@@ -1,12 +1,16 @@
 # logfile_fd: It can be disabled by configuration, but typically tiles
 #             will open a log file on boot and write all messages there.
 #
-# mcast_rx_sock: The UDP socket bound to the source multicast group for
-#                receiving shreds.
+# mcast_rx_sock_0..7: UDP sockets bound to source multicast groups for
+#                     receiving shreds (unused slots hold UINT_MAX which
+#                     never matches a real fd).
 #
-# mcast_tx_sock: The UDP socket used to send shreds to the destination
-#                multicast group.
-unsigned int logfile_fd, uint mcast_rx_sock, uint mcast_tx_sock
+# mcast_tx_sock: The UDP socket used to send shreds to destination
+#                multicast groups.
+unsigned int logfile_fd,
+uint mcast_rx_sock_0, uint mcast_rx_sock_1, uint mcast_rx_sock_2, uint mcast_rx_sock_3,
+uint mcast_rx_sock_4, uint mcast_rx_sock_5, uint mcast_rx_sock_6, uint mcast_rx_sock_7,
+uint mcast_tx_sock
 
 # logging: all log messages are written to a file and/or pipe
 #
@@ -23,10 +27,17 @@ write: (or (eq (arg 0) 2)
 # arg 0 is the file descriptor to fsync.
 fsync: (eq (arg 0) logfile_fd)
 
-# recvmmsg: receive batches of shreds from the multicast source group.
-# Only allowed on the dedicated RX socket.
-recvmmsg: (eq (arg 0) mcast_rx_sock)
+# recvmmsg: receive batches of shreds from source multicast groups.
+# Allowed on any of the up to 8 dedicated RX sockets.
+recvmmsg: (or (eq (arg 0) mcast_rx_sock_0)
+              (eq (arg 0) mcast_rx_sock_1)
+              (eq (arg 0) mcast_rx_sock_2)
+              (eq (arg 0) mcast_rx_sock_3)
+              (eq (arg 0) mcast_rx_sock_4)
+              (eq (arg 0) mcast_rx_sock_5)
+              (eq (arg 0) mcast_rx_sock_6)
+              (eq (arg 0) mcast_rx_sock_7))
 
-# sendto: send shreds to the destination multicast group.
+# sendto: send shreds to destination multicast groups.
 # Only allowed on the dedicated TX socket.
 sendto: (eq (arg 0) mcast_tx_sock)

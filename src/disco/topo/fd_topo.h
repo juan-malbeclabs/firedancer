@@ -27,7 +27,11 @@
 #define FD_NET_MAX_SRC_ADDR 4
 
 /* Maximum number of additional destinations for leader shreds and for retransmitted shreds */
-#define FD_TOPO_ADTL_DESTS_MAX ( 32UL)
+#define FD_TOPO_ADTL_DESTS_MAX  ( 32UL)
+
+/* Maximum number of multicast source groups (RX) and destination groups (TX) */
+#define FD_SHRED_MCAST_SRC_MAX  (  8UL)
+#define FD_SHRED_MCAST_DST_MAX  (  8UL)
 
 
 /* A workspace is a Firedancer specific memory management structure that
@@ -303,8 +307,6 @@ struct fd_topo_tile {
       ulong             fec_resolver_depth;
       char              identity_key_path[ PATH_MAX ];
       ushort            shred_listen_port;
-      ushort            shred_mcast_listen_port;
-      uint              shred_mcast_group_ip; /* network byte order; 0 = disabled */
       int               larger_shred_limits_per_block;
       ushort            expected_shred_version;
       ulong             adtl_dests_retransmit_cnt;
@@ -522,15 +524,17 @@ struct fd_topo_tile {
     } txproc;
 
     struct {
-      uint   mcast_src_ip;   /* source group IP in network byte order  */
-      ushort mcast_src_port; /* source group port in host byte order    */
-      uint   mcast_dst_ip;   /* dest group IP in network byte order     */
-      ushort mcast_dst_port; /* dest group port in host byte order      */
-      uchar  mcast_ttl;      /* IP_MULTICAST_TTL (0 = default 1)       */
+      ulong  mcast_src_cnt;
+      uint   mcast_src_ips  [ FD_SHRED_MCAST_SRC_MAX ]; /* network byte order */
+      ushort mcast_src_ports[ FD_SHRED_MCAST_SRC_MAX ]; /* host byte order    */
+      ulong  mcast_dst_cnt;
+      uint   mcast_dst_ips  [ FD_SHRED_MCAST_DST_MAX ]; /* network byte order */
+      ushort mcast_dst_ports[ FD_SHRED_MCAST_DST_MAX ]; /* host byte order    */
+      uchar  mcast_ttl;                                  /* IP_MULTICAST_TTL (0 = default 1) */
 
       /* Set internally during privileged_init */
-      int mcast_rx_sock;
-      int mcast_tx_sock;
+      int mcast_rx_socks[ FD_SHRED_MCAST_SRC_MAX ]; /* one socket per source group */
+      int mcast_tx_sock;                              /* single TX socket            */
     } shred_mcast;
 
 #define FD_TOPO_SNAPSHOTS_GOSSIP_LIST_MAX (32UL)

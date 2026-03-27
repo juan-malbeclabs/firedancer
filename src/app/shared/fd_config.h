@@ -412,8 +412,6 @@ struct fd_config {
     struct {
       uint   max_pending_shred_sets;
       ushort shred_listen_port;
-      ushort shred_mcast_listen_port;
-      char   shred_mcast_group[ 16 ]; /* "A.B.C.D\0" multicast group for incoming shreds */
       ulong  additional_shred_destinations_retransmit_cnt;
       char   additional_shred_destinations_retransmit[ FD_TOPO_ADTL_DESTS_MAX ][ sizeof("255.255.255.255:65536") ];
       ulong  additional_shred_destinations_leader_cnt;
@@ -486,9 +484,11 @@ struct fd_config {
 
     struct {
       int    enabled;
-      char   mcast_src[ 22 ]; /* "A.B.C.D:PORT\0" — source multicast group to join */
-      char   mcast_dst[ 22 ]; /* "A.B.C.D:PORT\0" — destination multicast group   */
-      uint   mcast_ttl;       /* IP_MULTICAST_TTL (0 = default 1)                  */
+      ulong  mcast_srcs_cnt;
+      char   mcast_srcs[ FD_SHRED_MCAST_SRC_MAX ][ IP4_PORT_STR_MAX ]; /* "A.B.C.D:PORT\0" source groups */
+      ulong  mcast_dsts_cnt;
+      char   mcast_dsts[ FD_SHRED_MCAST_DST_MAX ][ IP4_PORT_STR_MAX ]; /* "A.B.C.D:PORT\0" dest groups   */
+      uint   mcast_ttl;                                                  /* IP_MULTICAST_TTL (0 = default 1) */
     } shred_mcast;
 
   } tiles;

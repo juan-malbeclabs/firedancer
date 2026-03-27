@@ -201,6 +201,7 @@ typedef struct {
 
   fd_shred_in_ctx_t in[ 32 ];
   int               in_kind[ 32 ];
+  int               in_is_mcast[ 32 ]; /* 1 if this polled input comes from a multicast source */
 
   fd_wksp_t * net_out_mem;
   ulong       net_out_chunk0;
@@ -251,7 +252,13 @@ typedef struct {
     ulong invalid_block_id_cnt;
     ulong shred_rejected_unchained_cnt;
     ulong repair_rcv_cnt;
+    ulong repair_rcv_bytes;
     ulong turbine_rcv_cnt;
+    ulong turbine_rcv_bytes;
+    ulong mcast_rcv_cnt;
+    ulong mcast_rcv_bytes;
+    ulong mcast_new_cnt;    /* mcast shreds that arrived first (before turbine unicast) */
+    ulong turbine_dup_cnt;  /* turbine shreds that were duplicates (mcast already delivered first) */
     fd_histf_t store_insert_wait[ 1 ];
     fd_histf_t store_insert_work[ 1 ];
     ulong fec_sets_completed; /* FEC sets forwarded to txproc tile */
@@ -326,7 +333,14 @@ metrics_write( fd_shred_ctx_t * ctx ) {
   FD_MHIST_COPY( SHRED, SHREDDING_DURATION_SECONDS, ctx->metrics->shredding_timing             );
   FD_MHIST_COPY( SHRED, ADD_SHRED_DURATION_SECONDS, ctx->metrics->add_shred_timing             );
   FD_MCNT_SET  ( SHRED, SHRED_OUT_RCV,              ctx->metrics->repair_rcv_cnt               );
+  FD_MCNT_SET  ( SHRED, SHRED_REPAIR_RCV_BYTES,     ctx->metrics->repair_rcv_bytes             );
   FD_MCNT_SET  ( SHRED, SHRED_TURBINE_RCV,          ctx->metrics->turbine_rcv_cnt              );
+  FD_MCNT_SET  ( SHRED, SHRED_TURBINE_RCV_BYTES,    ctx->metrics->turbine_rcv_bytes            );
+  FD_MCNT_SET  ( SHRED, SHRED_MCAST_RCV,            ctx->metrics->mcast_rcv_cnt                );
+  FD_MCNT_SET  ( SHRED, SHRED_MCAST_RCV_BYTES,      ctx->metrics->mcast_rcv_bytes              );
+  FD_MCNT_SET  ( SHRED, SHRED_MCAST_NEW_CNT,        ctx->metrics->mcast_new_cnt                );
+  FD_MCNT_SET  ( SHRED, SHRED_TURBINE_DUP_CNT,      ctx->metrics->turbine_dup_cnt              );
+  FD_MCNT_SET  ( SHRED, SHRED_FEC_SETS_COMPLETED,   ctx->metrics->fec_sets_completed           );
 
   FD_MCNT_SET  ( SHRED, INVALID_BLOCK_ID,           ctx->metrics->invalid_block_id_cnt         );
   FD_MCNT_SET  ( SHRED, SHRED_REJECTED_UNCHAINED,   ctx->metrics->shred_rejected_unchained_cnt );
@@ -692,8 +706,16 @@ during_frag( fd_shred_ctx_t * ctx,
       return;
     };
 
-    if( FD_UNLIKELY( fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR ) ) ctx->metrics->repair_rcv_cnt++;
-    else                                                                    ctx->metrics->turbine_rcv_cnt++;
+    if( FD_UNLIKELY( fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR ) ) {
+      ctx->metrics->repair_rcv_cnt++;
+      ctx->metrics->repair_rcv_bytes += sz;
+    } else if( FD_UNLIKELY( ctx->in_is_mcast[ in_idx ] ) ) {
+      ctx->metrics->mcast_rcv_cnt++;
+      ctx->metrics->mcast_rcv_bytes += sz;
+    } else {
+      ctx->metrics->turbine_rcv_cnt++;
+      ctx->metrics->turbine_rcv_bytes += sz;
+    }
 
     /* Drop unchained merkle shreds */
     int is_unchained = !fd_shred_is_chained( fd_shred_type( shred->variant ) );
@@ -910,6 +932,13 @@ after_frag( fd_shred_ctx_t *    ctx,
 
     fd_histf_sample( ctx->metrics->add_shred_timing, (ulong)add_shred_timing );
     ctx->metrics->shred_processing_result[ rv + FD_FEC_RESOLVER_ADD_SHRED_RETVAL_OFF+FD_SHRED_ADD_SHRED_EXTRA_RETVAL_CNT ]++;
+
+    if( FD_UNLIKELY( ctx->in_is_mcast[ in_idx ] ) ) {
+      ctx->metrics->mcast_new_cnt   += (ulong)( (rv==FD_FEC_RESOLVER_SHRED_OKAY) | (rv==FD_FEC_RESOLVER_SHRED_COMPLETES) );
+    } else {
+      /* IGNORED covers duplicates and shreds for FEC sets we've already completed */
+      ctx->metrics->turbine_dup_cnt += (ulong)( rv==FD_FEC_RESOLVER_SHRED_IGNORED );
+    }
 
     if( FD_UNLIKELY( ctx->shred_out_idx!=ULONG_MAX &&  /* Only send to repair in full Firedancer */
                      spilled_fec.slot!=0 && spilled_fec.max_dshred_idx!=FD_SHRED_BLK_MAX ) ) {
@@ -1403,26 +1432,31 @@ unprivileged_init( fd_topo_t *      topo,
   }
 
   uchar has_contact_info_in = 0;
+  ulong polled_i = 0UL; /* index into in_kind[], in_is_mcast[], in[] — skips unpolled links */
   for( ulong i=0UL; i<tile->in_cnt; i++ ) {
     fd_topo_link_t const * link = &topo->links[ tile->in_link_id[ i ] ];
     fd_topo_wksp_t const * link_wksp = &topo->workspaces[ topo->objs[ link->dcache_obj_id ].wksp_id ];
 
+    if( FD_UNLIKELY( !tile->in_link_poll[ i ] ) ) continue; /* skip unpolled links (e.g. sign_shred) */
+
+    ctx->in_is_mcast[ polled_i ] = 0; /* default: not a multicast source */
+
     if( FD_LIKELY(      !strcmp( link->name, "net_shred"    ) ) ) {
-      ctx->in_kind[ i ] = IN_KIND_NET;
-      fd_net_rx_bounds_init( &ctx->in[ i ].net_rx, link->dcache );
+      ctx->in_kind[ polled_i ] = IN_KIND_NET;
+      fd_net_rx_bounds_init( &ctx->in[ polled_i ].net_rx, link->dcache );
+      polled_i++;
       continue; /* only net_rx needs to be set in this case. */
     }
-    else if( FD_LIKELY( !strcmp( link->name, "poh_shred"    ) ) )   ctx->in_kind[ i ] = IN_KIND_POH;
-    else if( FD_LIKELY( !strcmp( link->name, "stake_out"    ) ) )   ctx->in_kind[ i ] = IN_KIND_STAKE;
-    else if( FD_LIKELY( !strcmp( link->name, "replay_stake" ) ) )   ctx->in_kind[ i ] = IN_KIND_STAKE;
-    else if( FD_LIKELY( !strcmp( link->name, "sign_shred"   ) ) )   ctx->in_kind[ i ] = IN_KIND_SIGN;
-    else if( FD_LIKELY( !strcmp( link->name, "repair_shred" ) ) )   ctx->in_kind[ i ] = IN_KIND_REPAIR;
-    else if( FD_LIKELY( !strcmp( link->name, "ipecho_out"   ) ) )   ctx->in_kind[ i ] = IN_KIND_IPECHO;
-    else if( FD_LIKELY( !strcmp( link->name, "crds_shred"   ) ) ) { ctx->in_kind[ i ] = IN_KIND_CONTACT;
+    else if( FD_LIKELY( !strcmp( link->name, "poh_shred"    ) ) )   ctx->in_kind[ polled_i ] = IN_KIND_POH;
+    else if( FD_LIKELY( !strcmp( link->name, "stake_out"    ) ) )   ctx->in_kind[ polled_i ] = IN_KIND_STAKE;
+    else if( FD_LIKELY( !strcmp( link->name, "replay_stake" ) ) )   ctx->in_kind[ polled_i ] = IN_KIND_STAKE;
+    else if( FD_LIKELY( !strcmp( link->name, "repair_shred" ) ) )   ctx->in_kind[ polled_i ] = IN_KIND_REPAIR;
+    else if( FD_LIKELY( !strcmp( link->name, "ipecho_out"   ) ) )   ctx->in_kind[ polled_i ] = IN_KIND_IPECHO;
+    else if( FD_LIKELY( !strcmp( link->name, "crds_shred"   ) ) ) { ctx->in_kind[ polled_i ] = IN_KIND_CONTACT;
       if( FD_UNLIKELY( has_contact_info_in ) ) FD_LOG_ERR(( "shred tile has multiple contact info in link types, can only be either gossip_out or crds_shred" ));
       has_contact_info_in = 1;
     }
-    else if( FD_LIKELY( !strcmp( link->name, "gossip_out"   ) ) ) { ctx->in_kind[ i ] = IN_KIND_GOSSIP;
+    else if( FD_LIKELY( !strcmp( link->name, "gossip_out"   ) ) ) { ctx->in_kind[ polled_i ] = IN_KIND_GOSSIP;
       if( FD_UNLIKELY( has_contact_info_in ) ) FD_LOG_ERR(( "shred tile has multiple contact info in link types, can only be either gossip_out or crds_shred" ));
       has_contact_info_in = 1;
     }
@@ -1430,10 +1464,11 @@ unprivileged_init( fd_topo_t *      topo,
     else FD_LOG_ERR(( "shred tile has unexpected input link %lu %s", i, link->name ));
 
     if( FD_LIKELY( !!link->mtu ) ) {
-      ctx->in[ i ].mem    = link_wksp->wksp;
-      ctx->in[ i ].chunk0 = fd_dcache_compact_chunk0( ctx->in[ i ].mem, link->dcache );
-      ctx->in[ i ].wmark  = fd_dcache_compact_wmark ( ctx->in[ i ].mem, link->dcache, link->mtu );
+      ctx->in[ polled_i ].mem    = link_wksp->wksp;
+      ctx->in[ polled_i ].chunk0 = fd_dcache_compact_chunk0( ctx->in[ polled_i ].mem, link->dcache );
+      ctx->in[ polled_i ].wmark  = fd_dcache_compact_wmark ( ctx->in[ polled_i ].mem, link->dcache, link->mtu );
     }
+    polled_i++;
   }
 
   fd_topo_link_t * net_out = &topo->links[ tile->out_link_id[ NET_OUT_IDX ] ];
@@ -1500,7 +1535,13 @@ unprivileged_init( fd_topo_t *      topo,
   ctx->metrics->invalid_block_id_cnt         = 0UL;
   ctx->metrics->shred_rejected_unchained_cnt = 0UL;
   ctx->metrics->repair_rcv_cnt               = 0UL;
+  ctx->metrics->repair_rcv_bytes             = 0UL;
   ctx->metrics->turbine_rcv_cnt              = 0UL;
+  ctx->metrics->turbine_rcv_bytes            = 0UL;
+  ctx->metrics->mcast_rcv_cnt                = 0UL;
+  ctx->metrics->mcast_rcv_bytes              = 0UL;
+  ctx->metrics->mcast_new_cnt                = 0UL;
+  ctx->metrics->turbine_dup_cnt              = 0UL;
 
   ctx->pending_batch.microblock_cnt = 0UL;
   ctx->pending_batch.txn_cnt        = 0UL;

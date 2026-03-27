@@ -742,7 +742,14 @@ metric introduced.
     <counter name="ForceCompleteFailure" summary="The number of times we failed to force complete a FEC set on request" />
     <counter name="ForceCompleteSuccess" summary="The number of times we successfully forced completed a FEC set on request" />
     <counter name="ShredOutRcv"          summary="The number of times we received a repair shred" />
+    <counter name="ShredRepairRcvBytes"  summary="Bytes received from repair (includes network headers)" />
     <counter name="ShredTurbineRcv"      summary="The number of times we received a turbine shred" />
+    <counter name="ShredTurbineRcvBytes" summary="Bytes received from turbine unicast (includes network headers)" />
+    <counter name="ShredMcastRcv"        summary="The number of times we received a shred on the multicast port" />
+    <counter name="ShredMcastRcvBytes"   summary="Bytes received on the multicast port (includes network headers)" />
+    <counter name="ShredMcastNewCnt"     summary="Multicast shreds that arrived before the turbine unicast copy" />
+    <counter name="ShredTurbineDupCnt"   summary="Turbine unicast shreds that were duplicates (multicast already delivered them)" />
+    <counter name="ShredFecSetsCompleted" summary="FEC sets forwarded to the txproc tile" />
     <histogram name="StoreInsertWait" min="0.00000001" max="0.0005" converter="seconds">
         <summary>Time in seconds spent waiting for the store to insert a new FEC set</summary>
     </histogram>

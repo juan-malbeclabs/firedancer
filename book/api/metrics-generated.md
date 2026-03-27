@@ -450,7 +450,14 @@
 | <span class="metrics-name">shred_&#8203;force_&#8203;complete_&#8203;failure</span> | counter | The number of times we failed to force complete a FEC set on request |
 | <span class="metrics-name">shred_&#8203;force_&#8203;complete_&#8203;success</span> | counter | The number of times we successfully forced completed a FEC set on request |
 | <span class="metrics-name">shred_&#8203;shred_&#8203;out_&#8203;rcv</span> | counter | The number of times we received a repair shred |
+| <span class="metrics-name">shred_&#8203;shred_&#8203;repair_&#8203;rcv_&#8203;bytes</span> | counter | Bytes received from repair (includes network headers) |
 | <span class="metrics-name">shred_&#8203;shred_&#8203;turbine_&#8203;rcv</span> | counter | The number of times we received a turbine shred |
+| <span class="metrics-name">shred_&#8203;shred_&#8203;turbine_&#8203;rcv_&#8203;bytes</span> | counter | Bytes received from turbine unicast (includes network headers) |
+| <span class="metrics-name">shred_&#8203;shred_&#8203;mcast_&#8203;rcv</span> | counter | The number of times we received a shred on the multicast port |
+| <span class="metrics-name">shred_&#8203;shred_&#8203;mcast_&#8203;rcv_&#8203;bytes</span> | counter | Bytes received on the multicast port (includes network headers) |
+| <span class="metrics-name">shred_&#8203;shred_&#8203;mcast_&#8203;new_&#8203;cnt</span> | counter | Multicast shreds that arrived before the turbine unicast copy |
+| <span class="metrics-name">shred_&#8203;shred_&#8203;turbine_&#8203;dup_&#8203;cnt</span> | counter | Turbine unicast shreds that were duplicates (multicast already delivered them) |
+| <span class="metrics-name">shred_&#8203;shred_&#8203;fec_&#8203;sets_&#8203;completed</span> | counter | FEC sets forwarded to the txproc tile |
 | <span class="metrics-name">shred_&#8203;store_&#8203;insert_&#8203;wait</span> | histogram | Time in seconds spent waiting for the store to insert a new FEC set |
 | <span class="metrics-name">shred_&#8203;store_&#8203;insert_&#8203;work</span> | histogram | Time in seconds spent on inserting a new FEC set |
 

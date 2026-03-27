@@ -1057,7 +1057,7 @@ after_frag( fd_shred_ctx_t *    ctx,
 
       /* Publish entry batch bytes to the txproc tile if connected */
       if( FD_UNLIKELY( ctx->txproc_out_idx!=ULONG_MAX && fec->data_sz>0UL ) ) {
-        ulong txp_sig = (last->slot << 16) | (ulong)last->fec_set_idx;
+        ulong txp_sig = (last->slot << 32UL) | (ulong)last->fec_set_idx;
         uchar * dst = fd_chunk_to_laddr( ctx->txproc_out_mem, ctx->txproc_out_chunk );
         fd_memcpy( dst, fec->data, fec->data_sz );
         ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );

@@ -69,6 +69,7 @@ typedef struct {
   struct {
     ulong shredded_batches_received;
     ulong dedup_skipped;
+    ulong fec_sets_processed;
     ulong transactions_received;
     ulong transactions_logged;
     ulong votes_skipped;
@@ -208,9 +209,9 @@ during_frag( fd_txlog_ctx_t * ctx,
   if( FD_UNLIKELY( sz > FD_TXLOG_ENTRY_BATCH_MAX ) ) ctx->metrics.entry_batches_truncated++;
   fd_memcpy( ctx->entry_batch, src, copy_sz );
   ctx->entry_batch_sz = copy_sz;
-  /* sig encodes (slot<<16)|fec_set_idx — decode both fields */
-  ctx->slot        = sig >> 16;
-  ctx->fec_set_idx = (uint)(sig & 0xFFFFUL);
+  /* sig encodes (slot<<32)|fec_set_idx — decode both fields */
+  ctx->slot        = sig >> 32;
+  ctx->fec_set_idx = (uint)(sig & 0xFFFFFFFFUL);
 }
 
 static inline void
@@ -226,9 +227,14 @@ after_frag( fd_txlog_ctx_t *    ctx,
   uchar * cur = ctx->entry_batch;
   uchar * end = cur + ctx->entry_batch_sz;
 
+  ctx->metrics.shredded_batches_received++;
+
   /* Deduplicate: skip this FEC set if already processed (can arrive from
-     multiple shred tiles when multicast is enabled). */
-  ulong dedup_key = (slot << 16UL) | (ulong)ctx->fec_set_idx;
+     multiple shred tiles when multicast is enabled).  The store already
+     prevents most duplicates via merkle-root uniqueness; this cache is a
+     belt-and-suspenders safety net.  Use 32-bit fields to match the sig
+     encoding in the shred tile: (slot<<32)|fec_set_idx. */
+  ulong dedup_key = (slot << 32UL) | (ulong)ctx->fec_set_idx;
   for( ulong i=0UL; i<FD_TXLOG_DEDUP_CACHE_SZ; i++ ) {
     if( FD_UNLIKELY( ctx->dedup_cache[ i ]==dedup_key ) ) {
       ctx->metrics.dedup_skipped++;
@@ -237,6 +243,8 @@ after_frag( fd_txlog_ctx_t *    ctx,
   }
   ctx->dedup_cache[ ctx->dedup_head % FD_TXLOG_DEDUP_CACHE_SZ ] = dedup_key;
   ctx->dedup_head++;
+
+  ctx->metrics.fec_sets_processed++;
 
   /* Skip the ulong microblock_cnt prefix that precedes the concatenated
      fd_entry_batch_header_t + transaction payload bytes. */
@@ -380,13 +388,13 @@ after_frag( fd_txlog_ctx_t *    ctx,
     }
   }
 
-  ctx->metrics.shredded_batches_received++;
 }
 
 static inline void
 metrics_write( fd_txlog_ctx_t * ctx ) {
   FD_MCNT_SET( TXPROC, SHREDDED_BATCHES_RECEIVED,  ctx->metrics.shredded_batches_received  );
   FD_MCNT_SET( TXPROC, DEDUP_SKIPPED,               ctx->metrics.dedup_skipped               );
+  FD_MCNT_SET( TXPROC, FEC_SETS_PROCESSED,           ctx->metrics.fec_sets_processed           );
   FD_MCNT_SET( TXPROC, TRANSACTIONS_RECEIVED,       ctx->metrics.transactions_received       );
   FD_MCNT_SET( TXPROC, TRANSACTIONS_LOGGED,         ctx->metrics.transactions_logged         );
   FD_MCNT_SET( TXPROC, VOTES_SKIPPED,               ctx->metrics.votes_skipped               );

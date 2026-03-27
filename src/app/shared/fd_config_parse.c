@@ -272,6 +272,10 @@ fd_config_extract_pod( uchar *       pod,
     CFG_POP      ( ulong,   tiles.shredcap.write_buffer_size              );
   }
 
+  CFG_POP        ( bool,    tiles.txproc.enabled                           );
+  CFG_POP        ( cstr,    tiles.txproc.log_path                          );
+  CFG_POP        ( cstr,    tiles.txproc.swap_log_path                     );
+
   CFG_POP      ( bool,   development.sandbox                              );
   CFG_POP      ( bool,   development.no_clone                             );
   CFG_POP      ( bool,   development.core_dump                            );

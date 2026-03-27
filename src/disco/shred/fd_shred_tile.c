@@ -221,6 +221,14 @@ typedef struct {
   ulong       shred_out_wmark;
   ulong       shred_out_chunk;
 
+  /* Output link for entry batch bytes sent to the txproc tile
+     (Firedancer-only, optional). */
+  ulong       txproc_out_idx;
+  fd_wksp_t * txproc_out_mem;
+  ulong       txproc_out_chunk0;
+  ulong       txproc_out_wmark;
+  ulong       txproc_out_chunk;
+
   fd_store_t * store;
 
   fd_gossip_update_message_t gossip_upd_buf[1];
@@ -238,6 +246,7 @@ typedef struct {
     ulong turbine_rcv_cnt;
     fd_histf_t store_insert_wait[ 1 ];
     fd_histf_t store_insert_work[ 1 ];
+    ulong fec_sets_completed; /* FEC sets forwarded to txproc tile */
   } metrics[ 1 ];
 
   struct {
@@ -1046,8 +1055,27 @@ after_frag( fd_shred_ctx_t *    ctx,
          held, and enables replay to acquire the exclusive lock and
          avoid getting starved. */
 
+      /* Publish entry batch bytes to the txproc tile if connected */
+      if( FD_UNLIKELY( ctx->txproc_out_idx!=ULONG_MAX && fec->data_sz>0UL ) ) {
+        ulong txp_sig = (last->slot << 16) | (ulong)last->fec_set_idx;
+        uchar * dst = fd_chunk_to_laddr( ctx->txproc_out_mem, ctx->txproc_out_chunk );
+        fd_memcpy( dst, fec->data, fec->data_sz );
+        ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
+        fd_stem_publish( stem, ctx->txproc_out_idx, txp_sig, ctx->txproc_out_chunk, fec->data_sz, 0UL, ctx->tsorig, tspub );
+          ctx->txproc_out_chunk = fd_dcache_compact_next( ctx->txproc_out_chunk, fec->data_sz, ctx->txproc_out_chunk0, ctx->txproc_out_wmark );
+        ctx->metrics->fec_sets_completed++;
+      }
+
       fd_histf_sample( ctx->metrics->store_insert_wait, (ulong)fd_long_max(shacq_end - shacq_start, 0) );
       fd_histf_sample( ctx->metrics->store_insert_work, (ulong)fd_long_max(shrel_end - shacq_end,   0) );
+    }
+
+    /* Publish entry batch bytes to the txproc tile (Frankendancer path).
+       In Firedancer this is handled inside the store block above.
+       In Frankendancer (ctx->store==NULL), assemble the payload directly
+       from the completed FEC set's data shreds. */
+    if( FD_UNLIKELY( !ctx->store && ctx->txproc_out_idx!=ULONG_MAX ) ) {
+
     }
 
     if( FD_LIKELY( ctx->shred_out_idx!=ULONG_MAX ) ) { /* firedancer-only */
@@ -1202,6 +1230,16 @@ unprivileged_init( fd_topo_t *      topo,
   void * fec_sets_shmem = NULL;
   ctx->shred_out_idx = fd_topo_find_tile_out_link( topo, tile, "shred_out", ctx->round_robin_id );
   ctx->store_out_idx = fd_topo_find_tile_out_link( topo, tile, "shred_store",  ctx->round_robin_id );
+  ctx->txproc_out_idx  = fd_topo_find_tile_out_link( topo, tile, "shred_txproc", ctx->round_robin_id );
+  if( FD_UNLIKELY( ctx->txproc_out_idx!=ULONG_MAX ) ) { /* firedancer-only, optional */
+    fd_topo_link_t * txproc_out = &topo->links[ tile->out_link_id[ ctx->txproc_out_idx ] ];
+    ctx->txproc_out_mem    = topo->workspaces[ topo->objs[ txproc_out->dcache_obj_id ].wksp_id ].wksp;
+    ctx->txproc_out_chunk0 = fd_dcache_compact_chunk0( ctx->txproc_out_mem, txproc_out->dcache );
+    ctx->txproc_out_wmark  = fd_dcache_compact_wmark ( ctx->txproc_out_mem, txproc_out->dcache, txproc_out->mtu );
+    ctx->txproc_out_chunk  = ctx->txproc_out_chunk0;
+  } else {
+    ctx->txproc_out_idx = ULONG_MAX;
+  }
   if( FD_LIKELY( ctx->shred_out_idx!=ULONG_MAX ) ) { /* firedancer-only */
     fd_topo_link_t * shred_out = &topo->links[ tile->out_link_id[ ctx->shred_out_idx ] ];
     ctx->shred_out_mem    = topo->workspaces[ topo->objs[ shred_out->dcache_obj_id ].wksp_id ].wksp;

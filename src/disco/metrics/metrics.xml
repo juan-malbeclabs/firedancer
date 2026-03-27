@@ -1083,4 +1083,16 @@ metric introduced.
     <counter name="TransactionsSent" summary="Number of benchmark packets sent" />
 </tile>
 
+<tile name="txproc">
+    <counter name="ShreddedBatchesReceived"  summary="Number of entry batches received from shred tiles" />
+    <counter name="DedupSkipped"             summary="Number of entry batches skipped because the same FEC set was already processed from another shred tile" />
+    <counter name="TransactionsReceived"     summary="Number of transactions successfully parsed before any filtering" />
+    <counter name="TransactionsLogged"       summary="Number of transactions written to the CSV log" />
+    <counter name="VotesSkipped"             summary="Number of vote transactions skipped" />
+    <counter name="ParseErrors"              summary="Number of transactions that failed to parse" />
+    <counter name="DexTransactionsLogged"    summary="Number of DEX/swap transactions written to the swap log" />
+    <counter name="WriteErrors"              summary="Number of write errors to the CSV log" />
+    <counter name="EntryBatchesTruncated"    summary="Number of entry batches truncated due to exceeding maximum size" />
+</tile>
+
 </metrics>

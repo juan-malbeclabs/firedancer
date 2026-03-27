@@ -775,6 +775,18 @@ fd_topo_initialize( config_t * config ) {
     fd_topob_tile_in( topo, "replay", 0UL, "metric_in", "rpc_replay", 0UL, FD_TOPOB_RELIABLE, FD_TOPOB_POLLED );
   }
 
+  if( FD_UNLIKELY( config->tiles.txproc.enabled ) ) {
+    fd_topob_wksp( topo, "shred_txproc" );
+    fd_topob_wksp( topo, "txproc" );
+
+    FOR(shred_tile_cnt) fd_topob_link( topo, "shred_txproc", "shred_txproc", 1024UL, 65536UL, 1UL );
+
+    fd_topob_tile( topo, "txproc", "txproc", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0, 0 );
+
+    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred", i, "shred_txproc", i );
+    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "txproc", 0UL, "metric_in", "shred_txproc", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+  }
+
   fd_topob_wksp( topo, "exec_replay" );
   FOR(exec_tile_cnt) fd_topob_link(     topo, "exec_replay", "exec_replay", 16384UL, sizeof(fd_exec_task_done_msg_t), 1UL );
   FOR(exec_tile_cnt) fd_topob_tile_out( topo, "exec",      i,                               "exec_replay", i );
@@ -1345,6 +1357,11 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     tile->bundle.ssl_heap_sz = config->development.bundle.ssl_heap_size_mib<<20;
     tile->bundle.keepalive_interval_nanos = config->tiles.bundle.keepalive_interval_millis * (ulong)1e6;
     tile->bundle.tls_cert_verify = !!config->tiles.bundle.tls_cert_verify;
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "txproc" ) ) ) {
+
+    fd_cstr_ncpy( tile->txproc.log_path,      config->tiles.txproc.log_path,      sizeof(tile->txproc.log_path)      );
+    fd_cstr_ncpy( tile->txproc.swap_log_path, config->tiles.txproc.swap_log_path, sizeof(tile->txproc.swap_log_path) );
+
   } else {
     FD_LOG_ERR(( "unknown tile name `%s`", tile->name ));
   }

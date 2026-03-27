@@ -476,6 +476,12 @@ struct fd_config {
       ulong write_buffer_size;
     } shredcap;
 
+    struct {
+      int  enabled;
+      char log_path[ PATH_MAX ];
+      char swap_log_path[ PATH_MAX ];
+    } txproc;
+
   } tiles;
   struct {
     ulong capture_start_slot;

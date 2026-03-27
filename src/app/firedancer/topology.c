@@ -787,6 +787,18 @@ fd_topo_initialize( config_t * config ) {
     FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "txproc", 0UL, "metric_in", "shred_txproc", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
   }
 
+  if( FD_UNLIKELY( config->tiles.shred_mcast.enabled ) ) {
+    fd_topob_wksp( topo, "shred_mcast" );
+
+    /* One shred_mcast link per shred tile — each carries raw shred bytes */
+    FOR(shred_tile_cnt) fd_topob_link( topo, "shred_mcast", "shred_mcast", 1024UL, FD_SHRED_MAX_SZ, 1UL );
+
+    fd_topob_tile( topo, "shred_mcast", "shred_mcast", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 );
+
+    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred", i, "shred_mcast", i );
+    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "shred_mcast", 0UL, "metric_in", "shred_mcast", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+  }
+
   fd_topob_wksp( topo, "exec_replay" );
   FOR(exec_tile_cnt) fd_topob_link(     topo, "exec_replay", "exec_replay", 16384UL, sizeof(fd_exec_task_done_msg_t), 1UL );
   FOR(exec_tile_cnt) fd_topob_tile_out( topo, "exec",      i,                               "exec_replay", i );
@@ -1361,6 +1373,21 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
 
     fd_cstr_ncpy( tile->txproc.log_path,      config->tiles.txproc.log_path,      sizeof(tile->txproc.log_path)      );
     fd_cstr_ncpy( tile->txproc.swap_log_path, config->tiles.txproc.swap_log_path, sizeof(tile->txproc.swap_log_path) );
+
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "shred_mcast" ) ) ) {
+
+    fd_topo_ip_port_t src_parsed = {0};
+    fd_topo_ip_port_t dst_parsed = {0};
+    parse_ip_port( "tiles.shred_mcast.mcast_src", config->tiles.shred_mcast.mcast_src, &src_parsed );
+    parse_ip_port( "tiles.shred_mcast.mcast_dst", config->tiles.shred_mcast.mcast_dst, &dst_parsed );
+
+    tile->shred_mcast.mcast_src_ip   = src_parsed.ip;
+    tile->shred_mcast.mcast_src_port = src_parsed.port;
+    tile->shred_mcast.mcast_dst_ip   = dst_parsed.ip;
+    tile->shred_mcast.mcast_dst_port = dst_parsed.port;
+    tile->shred_mcast.mcast_ttl      = (uchar)config->tiles.shred_mcast.mcast_ttl;
+    tile->shred_mcast.mcast_rx_sock  = -1;
+    tile->shred_mcast.mcast_tx_sock  = -1;
 
   } else {
     FD_LOG_ERR(( "unknown tile name `%s`", tile->name ));

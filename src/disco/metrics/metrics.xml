@@ -1096,4 +1096,12 @@ metric introduced.
     <counter name="EntryBatchesTruncated"    summary="Number of entry batches truncated due to exceeding maximum size" />
 </tile>
 
+<tile name="shred_mcast">
+    <counter name="RxTurbineShreds"   summary="Number of shreds received from the turbine (shred tile) input link" />
+    <counter name="RxMcastShreds"     summary="Number of shreds received from the external IP multicast source socket" />
+    <counter name="TxMcastShreds"     summary="Number of shreds forwarded to the multicast destination address" />
+    <counter name="DedupSkipped"      summary="Number of shreds dropped because they were already seen from the other source" />
+    <counter name="ParseFailed"       summary="Number of shreds dropped because fd_shred_parse() returned NULL" />
+</tile>
+
 </metrics>

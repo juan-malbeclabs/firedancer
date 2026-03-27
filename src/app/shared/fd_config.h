@@ -482,6 +482,13 @@ struct fd_config {
       char swap_log_path[ PATH_MAX ];
     } txproc;
 
+    struct {
+      int    enabled;
+      char   mcast_src[ 22 ]; /* "A.B.C.D:PORT\0" — source multicast group to join */
+      char   mcast_dst[ 22 ]; /* "A.B.C.D:PORT\0" — destination multicast group   */
+      uint   mcast_ttl;       /* IP_MULTICAST_TTL (0 = default 1)                  */
+    } shred_mcast;
+
   } tiles;
   struct {
     ulong capture_start_slot;

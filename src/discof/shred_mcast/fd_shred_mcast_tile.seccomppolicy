@@ -1,0 +1,32 @@
+# logfile_fd: It can be disabled by configuration, but typically tiles
+#             will open a log file on boot and write all messages there.
+#
+# mcast_rx_sock: The UDP socket bound to the source multicast group for
+#                receiving shreds.
+#
+# mcast_tx_sock: The UDP socket used to send shreds to the destination
+#                multicast group.
+unsigned int logfile_fd, uint mcast_rx_sock, uint mcast_tx_sock
+
+# logging: all log messages are written to a file and/or pipe
+#
+# 'WARNING' and above are written to the STDERR pipe, while all messages
+# are always written to the log file.
+#
+# arg 0 is the file descriptor to write to.  The boot process ensures
+# that descriptor 2 is always STDERR.
+write: (or (eq (arg 0) 2)
+           (eq (arg 0) logfile_fd))
+
+# logging: 'WARNING' and above fsync the logfile to disk immediately
+#
+# arg 0 is the file descriptor to fsync.
+fsync: (eq (arg 0) logfile_fd)
+
+# recvmmsg: receive batches of shreds from the multicast source group.
+# Only allowed on the dedicated RX socket.
+recvmmsg: (eq (arg 0) mcast_rx_sock)
+
+# sendto: send shreds to the destination multicast group.
+# Only allowed on the dedicated TX socket.
+sendto: (eq (arg 0) mcast_tx_sock)

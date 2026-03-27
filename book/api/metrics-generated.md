@@ -1137,3 +1137,17 @@
 | <span class="metrics-name">txproc_&#8203;entry_&#8203;batches_&#8203;truncated</span> | counter | Number of entry batches truncated due to exceeding maximum size |
 
 </div>
+
+## Shred_mcast Tile
+
+<div class="metrics">
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;turbine_&#8203;shreds</span> | counter | Number of shreds received from the turbine (shred tile) input link |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;shreds</span> | counter | Number of shreds received from the external IP multicast source socket |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;tx_&#8203;mcast_&#8203;shreds</span> | counter | Number of shreds forwarded to the multicast destination address |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;dedup_&#8203;skipped</span> | counter | Number of shreds dropped because they were already seen from the other source |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;parse_&#8203;failed</span> | counter | Number of shreds dropped because fd_shred_parse() returned NULL |
+
+</div>

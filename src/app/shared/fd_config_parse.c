@@ -276,6 +276,11 @@ fd_config_extract_pod( uchar *       pod,
   CFG_POP        ( cstr,    tiles.txproc.log_path                          );
   CFG_POP        ( cstr,    tiles.txproc.swap_log_path                     );
 
+  CFG_POP        ( bool,    tiles.shred_mcast.enabled                      );
+  CFG_POP        ( cstr,    tiles.shred_mcast.mcast_src                    );
+  CFG_POP        ( cstr,    tiles.shred_mcast.mcast_dst                    );
+  CFG_POP        ( uint,    tiles.shred_mcast.mcast_ttl                    );
+
   CFG_POP      ( bool,   development.sandbox                              );
   CFG_POP      ( bool,   development.no_clone                             );
   CFG_POP      ( bool,   development.core_dump                            );

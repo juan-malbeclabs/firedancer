@@ -519,6 +519,18 @@ struct fd_topo_tile {
       int swaplog_fd;
     } txproc;
 
+    struct {
+      uint   mcast_src_ip;   /* source group IP in network byte order  */
+      ushort mcast_src_port; /* source group port in host byte order    */
+      uint   mcast_dst_ip;   /* dest group IP in network byte order     */
+      ushort mcast_dst_port; /* dest group port in host byte order      */
+      uchar  mcast_ttl;      /* IP_MULTICAST_TTL (0 = default 1)       */
+
+      /* Set internally during privileged_init */
+      int mcast_rx_sock;
+      int mcast_tx_sock;
+    } shred_mcast;
+
 #define FD_TOPO_SNAPSHOTS_GOSSIP_LIST_MAX (32UL)
 #define FD_TOPO_SNAPSHOTS_SERVERS_MAX     (16UL)
 

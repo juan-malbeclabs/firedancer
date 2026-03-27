@@ -40,6 +40,7 @@ class Tile(Enum):
     SNAPWR = 34
     BENCHS = 35
     TXPROC = 36
+    SHRED_MCAST = 37
 
 class MetricType(Enum):
     COUNTER = 0

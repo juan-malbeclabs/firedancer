@@ -229,6 +229,14 @@ typedef struct {
   ulong       txproc_out_wmark;
   ulong       txproc_out_chunk;
 
+  /* Output link for raw shred bytes sent to the shred_mcast tile
+     (Firedancer-only, optional). */
+  ulong       mcast_out_idx;
+  fd_wksp_t * mcast_out_mem;
+  ulong       mcast_out_chunk0;
+  ulong       mcast_out_wmark;
+  ulong       mcast_out_chunk;
+
   fd_store_t * store;
 
   fd_gossip_update_message_t gossip_upd_buf[1];
@@ -931,6 +939,24 @@ after_frag( fd_shred_ctx_t *    ctx,
         } while( 0 );
       }
 
+      /* Forward raw shred bytes to the mcast tile (optional, Firedancer-only) */
+      if( FD_UNLIKELY( ctx->mcast_out_idx!=ULONG_MAX ) ) {
+        ulong shred_sz = fd_shred_sz( *out_shred );
+        uchar * dst = fd_chunk_to_laddr( ctx->mcast_out_mem, ctx->mcast_out_chunk );
+        fd_memcpy( dst, *out_shred, shred_sz );
+        int  is_code               = fd_shred_is_code( fd_shred_type( (*out_shred)->variant ) );
+        uint shred_idx_or_data_cnt = (*out_shred)->idx;
+        if( FD_LIKELY( is_code ) ) shred_idx_or_data_cnt = (*out_shred)->code.data_cnt;
+        ulong mcast_sig = fd_disco_shred_out_shred_sig( fd_disco_netmux_sig_proto(sig)==DST_PROTO_SHRED,
+                                                        (*out_shred)->slot,
+                                                        (*out_shred)->fec_set_idx,
+                                                        is_code,
+                                                        shred_idx_or_data_cnt );
+        ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
+        fd_stem_publish( stem, ctx->mcast_out_idx, mcast_sig, ctx->mcast_out_chunk, shred_sz, 0UL, ctx->tsorig, tspub );
+        ctx->mcast_out_chunk = fd_dcache_compact_next( ctx->mcast_out_chunk, shred_sz, ctx->mcast_out_chunk0, ctx->mcast_out_wmark );
+      }
+
       if( FD_LIKELY( ctx->shred_out_idx!=ULONG_MAX ) ) { /* Only send to repair/replay in full Firedancer */
 
         /* Construct the sig from the shred. */
@@ -1239,6 +1265,16 @@ unprivileged_init( fd_topo_t *      topo,
     ctx->txproc_out_chunk  = ctx->txproc_out_chunk0;
   } else {
     ctx->txproc_out_idx = ULONG_MAX;
+  }
+  ctx->mcast_out_idx = fd_topo_find_tile_out_link( topo, tile, "shred_mcast", ctx->round_robin_id );
+  if( FD_UNLIKELY( ctx->mcast_out_idx!=ULONG_MAX ) ) { /* firedancer-only, optional */
+    fd_topo_link_t * mcast_out = &topo->links[ tile->out_link_id[ ctx->mcast_out_idx ] ];
+    ctx->mcast_out_mem    = topo->workspaces[ topo->objs[ mcast_out->dcache_obj_id ].wksp_id ].wksp;
+    ctx->mcast_out_chunk0 = fd_dcache_compact_chunk0( ctx->mcast_out_mem, mcast_out->dcache );
+    ctx->mcast_out_wmark  = fd_dcache_compact_wmark ( ctx->mcast_out_mem, mcast_out->dcache, mcast_out->mtu );
+    ctx->mcast_out_chunk  = ctx->mcast_out_chunk0;
+  } else {
+    ctx->mcast_out_idx = ULONG_MAX;
   }
   if( FD_LIKELY( ctx->shred_out_idx!=ULONG_MAX ) ) { /* firedancer-only */
     fd_topo_link_t * shred_out = &topo->links[ tile->out_link_id[ ctx->shred_out_idx ] ];

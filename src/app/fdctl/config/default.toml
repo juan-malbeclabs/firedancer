@@ -1397,6 +1397,11 @@ dynamic_port_range = "8900-9000"
         additional_shred_destinations_retransmit = []
         additional_shred_destinations_leader = []
 
+    [tiles.txproc]
+        enabled = false
+        log_path = ""
+        swap_log_path = ""
+
     # The metric tile receives metrics updates published from the rest
     # of the tiles and serves them via. a Prometheus compatible HTTP
     # endpoint.

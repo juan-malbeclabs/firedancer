@@ -510,6 +510,15 @@ struct fd_topo_tile {
       int slices_fd;
     } shredcap;
 
+    struct {
+      char log_path[      PATH_MAX ];
+      char swap_log_path[ PATH_MAX ];
+
+      /* Set internally during privileged_init */
+      int logfile_fd;
+      int swaplog_fd;
+    } txproc;
+
 #define FD_TOPO_SNAPSHOTS_GOSSIP_LIST_MAX (32UL)
 #define FD_TOPO_SNAPSHOTS_SERVERS_MAX     (16UL)
 

@@ -1118,3 +1118,21 @@
 | <span class="metrics-name">benchs_&#8203;transactions_&#8203;sent</span> | counter | Number of benchmark packets sent |
 
 </div>
+
+## Txproc Tile
+
+<div class="metrics">
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| <span class="metrics-name">txproc_&#8203;shredded_&#8203;batches_&#8203;received</span> | counter | Number of entry batches received from shred tiles |
+| <span class="metrics-name">txproc_&#8203;dedup_&#8203;skipped</span> | counter | Number of entry batches skipped because the same FEC set was already processed from another shred tile |
+| <span class="metrics-name">txproc_&#8203;transactions_&#8203;received</span> | counter | Number of transactions successfully parsed before any filtering |
+| <span class="metrics-name">txproc_&#8203;transactions_&#8203;logged</span> | counter | Number of transactions written to the CSV log |
+| <span class="metrics-name">txproc_&#8203;votes_&#8203;skipped</span> | counter | Number of vote transactions skipped |
+| <span class="metrics-name">txproc_&#8203;parse_&#8203;errors</span> | counter | Number of transactions that failed to parse |
+| <span class="metrics-name">txproc_&#8203;dex_&#8203;transactions_&#8203;logged</span> | counter | Number of DEX/swap transactions written to the swap log |
+| <span class="metrics-name">txproc_&#8203;write_&#8203;errors</span> | counter | Number of write errors to the CSV log |
+| <span class="metrics-name">txproc_&#8203;entry_&#8203;batches_&#8203;truncated</span> | counter | Number of entry batches truncated due to exceeding maximum size |
+
+</div>

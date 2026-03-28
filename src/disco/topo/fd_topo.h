@@ -236,6 +236,11 @@ struct fd_topo_tile {
         ushort tpu_quic;
         ushort repair;
       } ports;
+
+      /* When set, outgoing gossip messages are limited to entrypoints
+         only (except ping/pong).  Used in shred_relay mode to avoid
+         generating ~200 MB/s of pull responses to the full network. */
+      int restrict_to_entrypoints;
     } gossip;
 
     struct {

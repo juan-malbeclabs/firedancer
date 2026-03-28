@@ -11,6 +11,13 @@
 #define FDCTL_COMMIT_REF_U32 0x0
 #endif
 
+/* Aliases for symbols referenced by the gossip tile (originally firedancer-only) */
+ulong const firedancer_major_version       = FDCTL_MAJOR_VERSION;
+ulong const firedancer_minor_version       = FDCTL_MINOR_VERSION;
+ulong const firedancer_patch_version       = FDCTL_PATCH_VERSION;
+uint  const firedancer_commit_ref          = FDCTL_COMMIT_REF_U32;
+char  const firedancer_commit_ref_string[] = FDCTL_COMMIT_REF_CSTR;
+
 ulong const fdctl_major_version     = FDCTL_MAJOR_VERSION;
 ulong const fdctl_minor_version     = FDCTL_MINOR_VERSION;
 ulong const fdctl_patch_version     = FDCTL_PATCH_VERSION;

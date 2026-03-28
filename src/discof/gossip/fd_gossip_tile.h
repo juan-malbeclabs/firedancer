@@ -43,6 +43,12 @@ struct fd_gossip_tile_ctx {
   ushort            net_id;
   fd_ip4_udp_hdrs_t net_out_hdr[ 1 ];
   fd_rng_t          rng[ 1 ];
+
+  /* Outgoing filter: when set, only ping/pong and messages to
+     entrypoints are forwarded to the network. */
+  int           restrict_to_entrypoints;
+  ulong         entrypoints_cnt;
+  fd_ip4_port_t entrypoints[ FD_TOPO_GOSSIP_ENTRYPOINTS_MAX ];
 };
 
 typedef struct fd_gossip_tile_ctx fd_gossip_tile_ctx_t;

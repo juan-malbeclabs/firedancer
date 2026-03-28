@@ -44,6 +44,19 @@ gossip_send_fn( void *                ctx,
                 ulong                 tsorig ) {
   fd_gossip_tile_ctx_t * gossip_ctx = (fd_gossip_tile_ctx_t *)ctx;
 
+  if( FD_UNLIKELY( gossip_ctx->restrict_to_entrypoints ) ) {
+    /* Ping (4) and pong (5) always pass — required for reachability */
+    uint msg_type = payload_sz>=4U ? FD_LOAD( uint, payload ) : UINT_MAX;
+    int is_ping_pong = ( msg_type==4U || msg_type==5U );
+    if( FD_LIKELY( !is_ping_pong ) ) {
+      int allowed = 0;
+      for( ulong i=0UL; i<gossip_ctx->entrypoints_cnt; i++ ) {
+        if( gossip_ctx->entrypoints[ i ].addr == peer_address->addr ) { allowed = 1; break; }
+      }
+      if( FD_UNLIKELY( !allowed ) ) return;
+    }
+  }
+
   uchar * packet          = (uchar *)fd_chunk_to_laddr( gossip_ctx->net_out->mem, gossip_ctx->net_out->chunk );
   fd_ip4_udp_hdrs_t * hdr = (fd_ip4_udp_hdrs_t *)packet;
   *hdr = *gossip_ctx->net_out_hdr;
@@ -397,6 +410,10 @@ unprivileged_init( fd_topo_t *      topo,
   ctx->my_contact_info->sockets[ FD_CONTACT_INFO_SOCKET_SERVE_REPAIR_QUIC ] = (fd_ip4_port_t){ .addr = 0, .port = 0 };
   ctx->my_contact_info->sockets[ FD_CONTACT_INFO_SOCKET_RPC ]               = (fd_ip4_port_t){ .addr = 0, .port = 0 };
   ctx->my_contact_info->sockets[ FD_CONTACT_INFO_SOCKET_RPC_PUBSUB ]        = (fd_ip4_port_t){ .addr = 0, .port = 0 };
+
+  ctx->restrict_to_entrypoints = tile->gossip.restrict_to_entrypoints;
+  ctx->entrypoints_cnt         = tile->gossip.entrypoints_cnt;
+  fd_memcpy( ctx->entrypoints, tile->gossip.entrypoints, tile->gossip.entrypoints_cnt * sizeof(fd_ip4_port_t) );
 
   ctx->gossip = fd_gossip_join( fd_gossip_new( _gossip,
                                                ctx->rng,

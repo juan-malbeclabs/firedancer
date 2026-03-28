@@ -792,8 +792,9 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     tile->gossip.ports.tpu             = 0; /* relay does not serve TPU */
     tile->gossip.ports.tpu_quic        = 0; /* relay does not serve TPU QUIC */
     tile->gossip.ports.repair          = 0; /* relay does not do repair */
-    tile->gossip.entrypoints_cnt       = config->gossip.entrypoints_cnt;
+    tile->gossip.entrypoints_cnt           = config->gossip.entrypoints_cnt;
     fd_memcpy( tile->gossip.entrypoints, config->gossip.resolved_entrypoints, tile->gossip.entrypoints_cnt * sizeof(fd_ip4_port_t) );
+    tile->gossip.restrict_to_entrypoints   = 1;
 
   } else {
     FD_LOG_ERR(( "unknown tile name %lu `%s`", tile->id, tile->name ));

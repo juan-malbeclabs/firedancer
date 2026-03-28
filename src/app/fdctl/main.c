@@ -61,6 +61,9 @@ extern fd_topo_run_tile_t fd_tile_poh;
 extern fd_topo_run_tile_t fd_tile_bank;
 extern fd_topo_run_tile_t fd_tile_store;
 extern fd_topo_run_tile_t fd_tile_shred_mcast;
+extern fd_topo_run_tile_t fd_tile_ipecho;
+extern fd_topo_run_tile_t fd_tile_gossvf;
+extern fd_topo_run_tile_t fd_tile_gossip;
 
 fd_topo_run_tile_t * TILES[] = {
   &fd_tile_net,
@@ -82,6 +85,9 @@ fd_topo_run_tile_t * TILES[] = {
   &fd_tile_bank,
   &fd_tile_store,
   &fd_tile_shred_mcast,
+  &fd_tile_ipecho,
+  &fd_tile_gossvf,
+  &fd_tile_gossip,
   NULL,
 };
 

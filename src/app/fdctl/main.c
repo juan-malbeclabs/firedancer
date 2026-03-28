@@ -60,6 +60,7 @@ extern fd_topo_run_tile_t fd_tile_resolv;
 extern fd_topo_run_tile_t fd_tile_poh;
 extern fd_topo_run_tile_t fd_tile_bank;
 extern fd_topo_run_tile_t fd_tile_store;
+extern fd_topo_run_tile_t fd_tile_shred_mcast;
 
 fd_topo_run_tile_t * TILES[] = {
   &fd_tile_net,
@@ -80,6 +81,7 @@ fd_topo_run_tile_t * TILES[] = {
   &fd_tile_poh,
   &fd_tile_bank,
   &fd_tile_store,
+  &fd_tile_shred_mcast,
   NULL,
 };
 

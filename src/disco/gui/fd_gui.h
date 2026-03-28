@@ -516,6 +516,16 @@ struct fd_gui_tile_stats {
   ulong pack_buffer_capacity;      /* Total size of the pack transaction buffer */
   ulong bank_txn_exec_cnt;         /* Number of transactions processed by the bank tile */
   ulong net_out_tx_bytes;          /* Number of bytes sent by the net or sock tile */
+
+  ulong txproc_shredded_batches_received; /* Shredded batches received (incl. duplicates from multiple shred tiles) */
+  ulong txproc_dedup_skipped;             /* Entry batches skipped as duplicates */
+  ulong txproc_transactions_received;     /* Transactions successfully parsed before filtering */
+  ulong txproc_transactions_logged;       /* Transactions written to CSV log */
+  ulong txproc_votes_skipped;             /* Vote transactions skipped */
+  ulong txproc_parse_errors;              /* Entry batches aborted due to parse failure */
+  ulong txproc_dex_transactions_logged;   /* DEX/swap transactions written to swap log */
+  ulong txproc_write_errors;              /* Write errors to CSV log */
+  ulong txproc_entry_batches_truncated;   /* Entry batches truncated due to exceeding max size */
 };
 
 typedef struct fd_gui_tile_stats fd_gui_tile_stats_t;

@@ -774,6 +774,21 @@ fd_gui_tile_stats_snap( fd_gui_t *                     gui,
     stats->pack_buffer_cnt      = pack_metrics[ MIDX( GAUGE, PACK, AVAILABLE_TRANSACTIONS ) ];
     stats->pack_buffer_capacity = pack->pack.max_pending_transactions;
   }
+
+  ulong txproc_tile_idx = fd_topo_find_tile( topo, "txproc", 0UL );
+  if( FD_LIKELY( txproc_tile_idx!=ULONG_MAX ) ) {
+    fd_topo_tile_t const * txproc         = &topo->tiles[ txproc_tile_idx ];
+    volatile ulong const * txproc_metrics = fd_metrics_tile( txproc->metrics );
+    stats->txproc_shredded_batches_received = txproc_metrics[ MIDX( COUNTER, TXPROC, SHREDDED_BATCHES_RECEIVED ) ];
+    stats->txproc_dedup_skipped             = txproc_metrics[ MIDX( COUNTER, TXPROC, DEDUP_SKIPPED             ) ];
+    stats->txproc_transactions_received     = txproc_metrics[ MIDX( COUNTER, TXPROC, TRANSACTIONS_RECEIVED     ) ];
+    stats->txproc_transactions_logged       = txproc_metrics[ MIDX( COUNTER, TXPROC, TRANSACTIONS_LOGGED       ) ];
+    stats->txproc_votes_skipped             = txproc_metrics[ MIDX( COUNTER, TXPROC, VOTES_SKIPPED             ) ];
+    stats->txproc_parse_errors              = txproc_metrics[ MIDX( COUNTER, TXPROC, PARSE_ERRORS              ) ];
+    stats->txproc_dex_transactions_logged   = txproc_metrics[ MIDX( COUNTER, TXPROC, DEX_TRANSACTIONS_LOGGED   ) ];
+    stats->txproc_write_errors              = txproc_metrics[ MIDX( COUNTER, TXPROC, WRITE_ERRORS              ) ];
+    stats->txproc_entry_batches_truncated   = txproc_metrics[ MIDX( COUNTER, TXPROC, ENTRY_BATCHES_TRUNCATED   ) ];
+  }
 }
 
 static void

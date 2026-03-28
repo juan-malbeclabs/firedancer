@@ -756,6 +756,15 @@ fd_gui_printf_tile_stats( fd_gui_t *                  gui,
     jsonp_double( gui->http, "poh", 0.0 );
     jsonp_double( gui->http, "shred", 0.0 );
     jsonp_double( gui->http, "store", 0.0 );
+    jsonp_ulong( gui->http, "txproc_batches",       cur->txproc_shredded_batches_received - prev->txproc_shredded_batches_received );
+    jsonp_ulong( gui->http, "txproc_dedup_skipped", cur->txproc_dedup_skipped             - prev->txproc_dedup_skipped             );
+    jsonp_ulong( gui->http, "txproc_received",      cur->txproc_transactions_received     - prev->txproc_transactions_received     );
+    jsonp_ulong( gui->http, "txproc_txns",          cur->txproc_transactions_logged       - prev->txproc_transactions_logged       );
+    jsonp_ulong( gui->http, "txproc_votes_skipped", cur->txproc_votes_skipped             - prev->txproc_votes_skipped             );
+    jsonp_ulong( gui->http, "txproc_parse_errors",  cur->txproc_parse_errors              - prev->txproc_parse_errors              );
+    jsonp_ulong( gui->http, "txproc_dex_txns",      cur->txproc_dex_transactions_logged   - prev->txproc_dex_transactions_logged   );
+    jsonp_ulong( gui->http, "txproc_write_errors",  cur->txproc_write_errors              - prev->txproc_write_errors              );
+    jsonp_ulong( gui->http, "txproc_truncated",     cur->txproc_entry_batches_truncated   - prev->txproc_entry_batches_truncated   );
   jsonp_close_object( gui->http );
 }
 

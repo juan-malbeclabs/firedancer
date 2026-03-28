@@ -871,6 +871,7 @@ fd_gui_poll( fd_gui_t * gui, long now ) {
     fd_gui_tile_timers_snap( gui );
 
     fd_gui_printf_live_tile_timers( gui );
+    fd_http_server_ws_broadcast( gui->http );
     fd_gui_printf_live_tile_metrics( gui );
     fd_http_server_ws_broadcast( gui->http );
 

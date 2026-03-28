@@ -498,6 +498,13 @@ fd_gui_printf_tiles( fd_gui_t * gui ) {
 }
 
 void
+fd_gui_printf_layout_mode( fd_gui_t * gui ) {
+  jsonp_open_envelope( gui->http, "summary", "layout_mode" );
+    jsonp_string( gui->http, "value", gui->summary.layout_mode );
+  jsonp_close_envelope( gui->http );
+}
+
+void
 fd_gui_printf_schedule_strategy( fd_gui_t * gui ) {
   jsonp_open_envelope( gui->http, "summary", "schedule_strategy" );
     char mode[10];

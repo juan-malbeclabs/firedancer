@@ -624,7 +624,8 @@ struct fd_gui {
       } boot_progress;
     };
 
-    int schedule_strategy;
+    int  schedule_strategy;
+    char layout_mode[ 32 ]; /* "validator" or "shred_relay" */
 
     ulong identity_account_balance;
     ulong vote_account_balance;
@@ -775,6 +776,7 @@ fd_gui_new( void *                shmem,
             int                   snapshots_enabled,
             int                   is_voting,
             int                   schedule_strategy,
+            char const *          layout_mode,
             fd_topo_t *           topo,
             long                  now );
 

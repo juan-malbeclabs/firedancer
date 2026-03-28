@@ -381,6 +381,18 @@ fd_config_fill( fd_config_t * config,
   }
   else FD_LOG_ERR(( "[tiles.pack.schedule_strategy] %s not recognized", config->tiles.pack.schedule_strategy ));
 
+  if( strcmp( config->layout.mode, "validator" ) &&
+      strcmp( config->layout.mode, "shred_relay" ) )
+    FD_LOG_ERR(( "[layout.mode] must be \"validator\" or \"shred_relay\", got \"%s\"",
+                 config->layout.mode ));
+
+  if( !strcmp( config->layout.mode, "shred_relay" ) ) {
+    if( FD_UNLIKELY( !config->tiles.shred_mcast.enabled ) )
+      FD_LOG_ERR(( "[layout.mode] shred_relay requires [tiles.shred_mcast] enabled = true" ));
+    if( FD_UNLIKELY( !config->consensus.expected_shred_version ) )
+      FD_LOG_ERR(( "[layout.mode] shred_relay requires [consensus] expected_shred_version to be set" ));
+  }
+
   fd_config_fill_net( config );
 
   if( FD_UNLIKELY( config->is_firedancer ) ) {

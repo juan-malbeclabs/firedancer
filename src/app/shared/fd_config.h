@@ -265,6 +265,8 @@ struct fd_config {
     uint verify_tile_count;
     uint bank_tile_count;
     uint shred_tile_count;
+
+    char mode[ 32 ]; /* "validator" (default) or "shred_relay" */
   } layout;
 
   struct {

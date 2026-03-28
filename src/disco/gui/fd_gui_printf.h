@@ -25,6 +25,7 @@ void fd_gui_printf_startup_progress( fd_gui_t * gui );
 void fd_gui_printf_boot_progress( fd_gui_t * gui );
 void fd_gui_printf_block_engine( fd_gui_t * gui );
 void fd_gui_printf_tiles( fd_gui_t * gui );
+void fd_gui_printf_layout_mode( fd_gui_t * gui );
 void fd_gui_printf_schedule_strategy( fd_gui_t * gui );
 void fd_gui_printf_identity_balance( fd_gui_t * gui );
 void fd_gui_printf_vote_balance( fd_gui_t * gui );

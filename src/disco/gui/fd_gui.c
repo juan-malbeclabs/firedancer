@@ -35,6 +35,7 @@ fd_gui_new( void *                shmem,
             int                   snapshots_enabled,
             int                   is_voting,
             int                   schedule_strategy,
+            char const *          layout_mode,
             fd_topo_t *           topo,
             long                  now ) {
 
@@ -60,6 +61,8 @@ fd_gui_new( void *                shmem,
 
   gui->leader_slot = ULONG_MAX;
   gui->summary.schedule_strategy = schedule_strategy;
+  strncpy( gui->summary.layout_mode, layout_mode, sizeof(gui->summary.layout_mode)-1UL );
+  gui->summary.layout_mode[ sizeof(gui->summary.layout_mode)-1UL ] = '\0';
 
 
   gui->next_sample_400millis = now;
@@ -217,6 +220,7 @@ fd_gui_ws_open( fd_gui_t * gui,
     fd_gui_printf_skipped_history_cluster,
     fd_gui_printf_tps_history,
     fd_gui_printf_tiles,
+    fd_gui_printf_layout_mode,
     fd_gui_printf_schedule_strategy,
     fd_gui_printf_identity_balance,
     fd_gui_printf_vote_balance,

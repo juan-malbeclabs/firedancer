@@ -667,6 +667,21 @@ user = ""
     # the layout manually.
     affinity = "auto"
 
+    # Operating mode for Firedancer.  Two modes are supported:
+    #
+    #   "validator"   Full validator node — all tiles are started.
+    #                 This is the default.
+    #
+    #   "shred_relay" Minimal relay-only node — receives shreds from
+    #                 turbine (unicast) and from multicast groups,
+    #                 deduplicates them and forwards to configured
+    #                 multicast destinations.  Heavy tiles (poh, bank,
+    #                 exec, replay, pack, quic, verify, dedup, repair,
+    #                 tower, send) are not started.
+    #                 Requires: [tiles.shred_mcast] enabled = true
+    #                           [consensus] expected_shred_version set
+    mode = "validator"
+
     # Logical CPU cores to blocklist from being used by Firedancer, when
     # using auto affinity.  If not using auto affinity, this option is
     # ignored.

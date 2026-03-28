@@ -118,7 +118,7 @@ fd_topo_initialize( config_t * config ) {
   if( FD_LIKELY( !relay ) )
     FOR(shred_tile_cnt) fd_topob_link( topo, "shred_store", "shred_store", 65536UL, 4UL*FD_SHRED_STORE_MTU, 4UL+config->tiles.shred.max_pending_shred_sets );
   else
-    FOR(shred_tile_cnt) fd_topob_link( topo, "shred_store", "shred_store", 128UL,   4UL*FD_SHRED_STORE_MTU, 1UL );
+    FOR(shred_tile_cnt) fd_topob_link( topo, "shred_store", "shred_store", 128UL,   4UL*FD_SHRED_STORE_MTU, 1UL )->permit_no_consumers = 1;
 
   FOR(shred_tile_cnt)  fd_topob_link( topo, "shred_sign",   "shred_sign",   128UL,                                    32UL,                   1UL );
   FOR(shred_tile_cnt)  fd_topob_link( topo, "sign_shred",   "sign_shred",   128UL,                                    64UL,                   1UL );

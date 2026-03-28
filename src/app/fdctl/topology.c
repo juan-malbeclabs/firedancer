@@ -10,8 +10,77 @@
 #include "../../util/pod/fd_pod_format.h"
 #include "../../util/net/fd_ip4.h"
 #include "../../util/tile/fd_tile_private.h"
+#include "../../discof/gossip/fd_gossip_tile.h"
+
+#include <netdb.h>
+#include <netinet/in.h>
 
 extern fd_topo_obj_callbacks_t * CALLBACKS[];
+
+static int
+resolve_address( char const * address,
+                 uint       * ip_addr ) {
+  struct addrinfo hints = { .ai_family = AF_INET };
+  struct addrinfo * res;
+  int err = getaddrinfo( address, NULL, &hints, &res );
+  if( FD_UNLIKELY( err ) ) {
+    FD_LOG_WARNING(( "cannot resolve address \"%s\": %i-%s", address, err, gai_strerror( err ) ));
+    return 0;
+  }
+
+  int resolved = 0;
+  for( struct addrinfo * cur=res; cur; cur=cur->ai_next ) {
+    if( FD_UNLIKELY( cur->ai_addr->sa_family!=AF_INET ) ) continue;
+    struct sockaddr_in const * addr = (struct sockaddr_in const *)cur->ai_addr;
+    *ip_addr = addr->sin_addr.s_addr;
+    resolved = 1;
+    break;
+  }
+
+  freeaddrinfo( res );
+  return resolved;
+}
+
+static int
+resolve_peer( char const *    peer,
+              fd_ip4_port_t * ip4_port ) {
+  char const * host_port = peer;
+  if( FD_LIKELY( strncmp( peer, "http://", 7UL )==0 ) ) {
+    host_port += 7UL;
+  } else if( FD_LIKELY( strncmp( peer, "https://", 8UL )==0 ) ) {
+    host_port += 8UL;
+  }
+
+  char const * colon = strrchr( host_port, ':' );
+  if( FD_UNLIKELY( !colon ) )
+    FD_LOG_ERR(( "invalid [gossip.entrypoints] entry \"%s\": no port number", host_port ));
+
+  char fqdn[ 255 ];
+  ulong fqdn_len = (ulong)( colon-host_port );
+  if( FD_UNLIKELY( fqdn_len>254 ) )
+    FD_LOG_ERR(( "invalid [gossip.entrypoints] entry \"%s\": hostname too long", host_port ));
+  fd_memcpy( fqdn, host_port, fqdn_len );
+  fqdn[ fqdn_len ] = '\0';
+
+  char const * port_str = colon+1;
+  char const * endptr   = NULL;
+  ulong port = strtoul( port_str, (char **)&endptr, 10 );
+  if( FD_UNLIKELY( !endptr || !port || port>USHORT_MAX || *endptr!='\0' ) )
+    FD_LOG_ERR(( "invalid [gossip.entrypoints] entry \"%s\": invalid port number", host_port ));
+  ip4_port->port = (ushort)fd_ushort_bswap( (ushort)port );
+
+  int resolved = resolve_address( fqdn, &ip4_port->addr );
+  return resolved;
+}
+
+static void
+resolve_gossip_entrypoints( config_t * config ) {
+  ulong entrypoint_cnt = config->gossip.entrypoints_cnt;
+  for( ulong i=0UL; i<entrypoint_cnt; i++ ) {
+    if( FD_UNLIKELY( 0==resolve_peer( config->gossip.entrypoints[ i ], &config->gossip.resolved_entrypoints[ i ] ) ) )
+      FD_LOG_ERR(( "failed to resolve address of [gossip.entrypoints] entry \"%s\"", config->gossip.entrypoints[ i ] ));
+  }
+}
 
 static void
 parse_ip_port( const char * name, const char * ip_port, fd_topo_ip_port_t *parsed_ip_port) {
@@ -51,6 +120,12 @@ fd_topo_initialize( config_t * config ) {
      FEC set memory (required by Frankendancer shred tile). */
   int relay = !strcmp( config->layout.mode, "shred_relay" );
 
+  /* In relay mode, add Firedancer gossip tiles (gossip, gossvf, ipecho)
+     so the network knows this validator's TVU port and can send shreds. */
+  ulong gossvf_tile_cnt = FD_UNLIKELY( relay ) ? 1UL : 0UL;
+
+  if( FD_UNLIKELY( relay ) ) resolve_gossip_entrypoints( config );
+
   fd_topo_t * topo = { fd_topob_new( &config->topo, config->name ) };
   topo->max_page_size = fd_cstr_to_shmem_page_sz( config->hugetlbfs.max_page_size );
   topo->gigantic_page_threshold = config->hugetlbfs.gigantic_page_threshold_mib << 20;
@@ -76,6 +151,19 @@ fd_topo_initialize( config_t * config ) {
 
   fd_topob_wksp( topo, "shred_sign"   );
   fd_topob_wksp( topo, "sign_shred"   );
+
+  if( FD_UNLIKELY( relay ) ) {
+    fd_topob_wksp( topo, "ipecho"       );
+    fd_topob_wksp( topo, "gossvf"       );
+    fd_topob_wksp( topo, "gossip"       );
+    fd_topob_wksp( topo, "net_gossip"   );
+    fd_topob_wksp( topo, "ipecho_out"   );
+    fd_topob_wksp( topo, "gossvf_gossi" );
+    fd_topob_wksp( topo, "gossip_gossv" );
+    fd_topob_wksp( topo, "gossip_out"   );
+    fd_topob_wksp( topo, "gossip_sign"  );
+    fd_topob_wksp( topo, "sign_gossip"  );
+  }
 
   if( FD_LIKELY( !relay ) ) fd_topob_wksp( topo, "quic"    );
   if( FD_LIKELY( !relay ) ) fd_topob_wksp( topo, "verify"  );
@@ -123,6 +211,16 @@ fd_topo_initialize( config_t * config ) {
   FOR(shred_tile_cnt)  fd_topob_link( topo, "shred_sign",   "shred_sign",   128UL,                                    32UL,                   1UL );
   FOR(shred_tile_cnt)  fd_topob_link( topo, "sign_shred",   "sign_shred",   128UL,                                    64UL,                   1UL );
 
+  if( FD_UNLIKELY( relay ) ) {
+    /**/                 fd_topob_link( topo, "gossip_net",   "net_gossip",   32768UL,                                  FD_NET_MTU,                          1UL );
+    /**/                 fd_topob_link( topo, "ipecho_out",   "ipecho_out",   2UL,                                      0UL,                                 1UL );
+    FOR(gossvf_tile_cnt) fd_topob_link( topo, "gossvf_gossi", "gossvf_gossi", config->net.ingress_buffer_size,          sizeof(fd_gossip_view_t)+FD_NET_MTU, 1UL );
+    /**/                 fd_topob_link( topo, "gossip_gossv", "gossip_gossv", 65536UL*4UL,                              sizeof(fd_gossip_ping_update_t),     1UL );
+    /**/                 fd_topob_link( topo, "gossip_out",   "gossip_out",   65536UL*4UL,                              sizeof(fd_gossip_update_message_t),  1UL )->permit_no_consumers = 1;
+    /**/                 fd_topob_link( topo, "gossip_sign",  "gossip_sign",  128UL,                                    2048UL,                              1UL );
+    /**/                 fd_topob_link( topo, "sign_gossip",  "sign_gossip",  128UL,                                    sizeof(fd_ed25519_sig_t),            1UL );
+  }
+
   ushort parsed_tile_to_cpu[ FD_TILE_MAX ];
   /* Unassigned tiles will be floating, unless auto topology is enabled. */
   for( ulong i=0UL; i<FD_TILE_MAX; i++ ) parsed_tile_to_cpu[ i ] = USHORT_MAX;
@@ -154,6 +252,7 @@ fd_topo_initialize( config_t * config ) {
 
   if( FD_LIKELY( !relay ) ) FOR(net_tile_cnt) fd_topos_net_rx_link( topo, "net_quic",  i, config->net.ingress_buffer_size );
   FOR(net_tile_cnt) fd_topos_net_rx_link( topo, "net_shred", i, config->net.ingress_buffer_size );
+  if( FD_UNLIKELY( relay ) ) FOR(net_tile_cnt) fd_topos_net_rx_link( topo, "net_gossvf", i, config->net.ingress_buffer_size );
 
   /*                                  topo, tile_name, tile_wksp, metrics_wksp, cpu_idx,                       is_agave, uses_keyswitch */
   if( FD_LIKELY( !relay ) ) FOR(quic_tile_cnt)   fd_topob_tile( topo, "quic",   "quic",   "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 );
@@ -166,6 +265,11 @@ fd_topo_initialize( config_t * config ) {
   FOR(shred_tile_cnt)        fd_topob_tile( topo, "shred",   "shred",   "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0,        1 );
   if( FD_LIKELY( !relay ) ) fd_topob_tile( topo, "store",   "store",   "metric_in",  tile_to_cpu[ topo->tile_cnt ], 1,        0 );
   /**/                 fd_topob_tile( topo, "sign",    "sign",    "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0,        1 );
+  if( FD_UNLIKELY( relay ) ) {
+    /**/               fd_topob_tile( topo, "ipecho",  "ipecho",  "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0,        0 );
+    FOR(gossvf_tile_cnt) fd_topob_tile( topo, "gossvf", "gossvf", "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0,        1 );
+    /**/               fd_topob_tile( topo, "gossip",  "gossip",  "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0,        1 );
+  }
   /**/                 fd_topob_tile( topo, "metric",  "metric",  "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0,        0 );
   /**/                 fd_topob_tile( topo, "cswtch",  "cswtch",  "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0,        0 );
 
@@ -254,6 +358,38 @@ fd_topo_initialize( config_t * config ) {
     /**/               fd_topob_tile_out( topo, "poh",    0UL,                        "crds_shred",   0UL                                                  );
     /**/               fd_topob_tile_out( topo, "poh",    0UL,                        "replay_resol", 0UL                                                  );
     /**/               fd_topob_tile_out( topo, "poh",    0UL,                        "executed_txn", 0UL                                                  );
+  }
+
+  if( FD_UNLIKELY( relay ) ) {
+    /* ipecho: no inputs (contacts entrypoints directly); outputs shred_version to downstream tiles */
+    /**/                 fd_topob_tile_out(   topo, "ipecho", 0UL,                        "ipecho_out",   0UL                                                );
+
+    /* gossvf: reads gossip UDP from net, plus feedback from gossip tile and ipecho */
+    FOR(gossvf_tile_cnt) for( ulong j=0UL; j<net_tile_cnt; j++ )
+                         fd_topob_tile_in(    topo, "gossvf", i,            "metric_in", "net_gossvf",   j,            FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED ); /* No reliable consumers of networking fragments, may be dropped or overrun */
+    FOR(gossvf_tile_cnt) fd_topob_tile_out(   topo, "gossvf", i,                         "gossvf_gossi", i                                                  );
+    FOR(gossvf_tile_cnt) fd_topob_tile_in(    topo, "gossvf", i,            "metric_in", "gossip_out",   0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+    FOR(gossvf_tile_cnt) fd_topob_tile_in(    topo, "gossvf", i,            "metric_in", "gossip_gossv", 0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+    FOR(gossvf_tile_cnt) fd_topob_tile_in(    topo, "gossvf", i,            "metric_in", "ipecho_out",   0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+
+    /* gossip: reads verified gossip from gossvf, shred_version from ipecho, signatures from sign */
+    /**/                 fd_topob_tile_out(   topo, "gossip", 0UL,                        "gossip_out",   0UL                                                );
+    /**/                 fd_topob_tile_out(   topo, "gossip", 0UL,                        "gossip_net",   0UL                                                );
+    /**/                 fd_topob_tile_out(   topo, "gossip", 0UL,                        "gossip_gossv", 0UL                                                );
+    /**/                 fd_topob_tile_in(    topo, "gossip", 0UL,           "metric_in", "ipecho_out",   0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+    FOR(gossvf_tile_cnt) fd_topob_tile_in(    topo, "gossip", 0UL,           "metric_in", "gossvf_gossi", i,            FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+
+    /* gossip <-> sign (signing gossip messages) */
+    /**/                 fd_topob_tile_in(    topo, "sign",   0UL,           "metric_in", "gossip_sign",  0UL,          FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED   );
+    /**/                 fd_topob_tile_out(   topo, "gossip", 0UL,                        "gossip_sign",  0UL                                                  );
+    /**/                 fd_topob_tile_in(    topo, "gossip", 0UL,           "metric_in", "sign_gossip",  0UL,          FD_TOPOB_UNRELIABLE, FD_TOPOB_UNPOLLED );
+    /**/                 fd_topob_tile_out(   topo, "sign",   0UL,                        "sign_gossip",  0UL                                                  );
+
+    /* net tile: gossip tile sends UDP packets out through the net tile */
+    /**/                 fd_topos_tile_in_net( topo,                         "metric_in", "gossip_net",   0UL,          FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED ); /* No reliable consumers of networking fragments, may be dropped or overrun */
+
+    /* shred tile: receives shred_version from ipecho so it can filter shreds correctly */
+    FOR(shred_tile_cnt)  fd_topob_tile_in(    topo, "shred",  i,            "metric_in", "ipecho_out",   0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
   }
 
   /* For now the only plugin consumer is the GUI */
@@ -468,6 +604,8 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     tile->net.shred_listen_port              = config->tiles.shred.shred_listen_port;
     tile->net.quic_transaction_listen_port   = config->tiles.quic.quic_transaction_listen_port;
     tile->net.legacy_transaction_listen_port = config->tiles.quic.regular_transaction_listen_port;
+    if( FD_UNLIKELY( !strcmp( config->layout.mode, "shred_relay" ) ) )
+      tile->net.gossip_listen_port           = config->gossip.port;
 
   } else if( FD_UNLIKELY( !strcmp( tile->name, "netlnk" ) ) ) {
 
@@ -623,6 +761,39 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     }
     tile->shred_mcast.mcast_ttl     = (uchar)config->tiles.shred_mcast.mcast_ttl;
     tile->shred_mcast.mcast_tx_sock = -1;
+
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "ipecho" ) ) ) {
+
+    tile->ipecho.expected_shred_version = config->consensus.expected_shred_version;
+    tile->ipecho.bind_address           = config->net.ip_addr;
+    tile->ipecho.bind_port              = config->gossip.port;
+    tile->ipecho.entrypoints_cnt        = config->gossip.entrypoints_cnt;
+    fd_memcpy( tile->ipecho.entrypoints, config->gossip.resolved_entrypoints, tile->ipecho.entrypoints_cnt * sizeof(fd_ip4_port_t) );
+
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "gossvf" ) ) ) {
+
+    strncpy( tile->gossvf.identity_key_path, config->paths.identity_key, sizeof(tile->gossvf.identity_key_path) );
+    tile->gossvf.tcache_depth          = 1<<22UL;
+    tile->gossvf.shred_version         = 0U;
+    tile->gossvf.allow_private_address = config->development.gossip.allow_private_address;
+    tile->gossvf.boot_timestamp_nanos  = config->boot_timestamp_nanos;
+    tile->gossvf.entrypoints_cnt       = config->gossip.entrypoints_cnt;
+    fd_memcpy( tile->gossvf.entrypoints, config->gossip.resolved_entrypoints, tile->gossvf.entrypoints_cnt * sizeof(fd_ip4_port_t) );
+
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "gossip" ) ) ) {
+
+    tile->gossip.ip_addr               = config->net.ip_addr;
+    strncpy( tile->gossip.identity_key_path, config->paths.identity_key, sizeof(tile->gossip.identity_key_path) );
+    tile->gossip.shred_version         = config->consensus.expected_shred_version;
+    tile->gossip.max_entries           = config->tiles.gossip.max_entries;
+    tile->gossip.boot_timestamp_nanos  = config->boot_timestamp_nanos;
+    tile->gossip.ports.gossip          = config->gossip.port;
+    tile->gossip.ports.tvu             = config->tiles.shred.shred_listen_port;
+    tile->gossip.ports.tpu             = 0; /* relay does not serve TPU */
+    tile->gossip.ports.tpu_quic        = 0; /* relay does not serve TPU QUIC */
+    tile->gossip.ports.repair          = 0; /* relay does not do repair */
+    tile->gossip.entrypoints_cnt       = config->gossip.entrypoints_cnt;
+    fd_memcpy( tile->gossip.entrypoints, config->gossip.resolved_entrypoints, tile->gossip.entrypoints_cnt * sizeof(fd_ip4_port_t) );
 
   } else {
     FD_LOG_ERR(( "unknown tile name %lu `%s`", tile->id, tile->name ));

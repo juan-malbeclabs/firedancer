@@ -477,6 +477,18 @@ fd_topo_initialize( config_t * config ) {
     }
   }
 
+  if( FD_UNLIKELY( config->tiles.txproc.enabled ) ) {
+    fd_topob_wksp( topo, "shred_txproc" );
+    fd_topob_wksp( topo, "txproc" );
+
+    FOR(shred_tile_cnt) fd_topob_link( topo, "shred_txproc", "shred_txproc", 1024UL, 65536UL, 1UL );
+
+    fd_topob_tile( topo, "txproc", "txproc", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 );
+
+    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred",  i,      "shred_txproc", i );
+    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "txproc", 0UL, "metric_in", "shred_txproc", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+  }
+
   if( FD_UNLIKELY( config->tiles.shred_mcast.enabled ) ) {
     fd_topob_wksp( topo, "shred_mcast" );
     fd_topob_wksp( topo, "mcast_shred" );
@@ -779,6 +791,11 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     tile->gossvf.boot_timestamp_nanos  = config->boot_timestamp_nanos;
     tile->gossvf.entrypoints_cnt       = config->gossip.entrypoints_cnt;
     fd_memcpy( tile->gossvf.entrypoints, config->gossip.resolved_entrypoints, tile->gossvf.entrypoints_cnt * sizeof(fd_ip4_port_t) );
+
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "txproc" ) ) ) {
+
+    fd_cstr_ncpy( tile->txproc.log_path,      config->tiles.txproc.log_path,      sizeof(tile->txproc.log_path)      );
+    fd_cstr_ncpy( tile->txproc.swap_log_path, config->tiles.txproc.swap_log_path, sizeof(tile->txproc.swap_log_path) );
 
   } else if( FD_UNLIKELY( !strcmp( tile->name, "gossip" ) ) ) {
 

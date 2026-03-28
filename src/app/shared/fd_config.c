@@ -395,6 +395,7 @@ fd_config_fill( fd_config_t * config,
        from the existing genesis.bin already present in the ledger directory. */
     config->frankendancer.consensus.snapshot_fetch = 0;
     config->frankendancer.consensus.genesis_fetch  = 0;
+    config->development.no_agave                   = 1;
   }
 
   fd_config_fill_net( config );

@@ -745,31 +745,35 @@ fd_gui_tile_stats_snap( fd_gui_t *                     gui,
     for( ulong b=0; b<FD_HISTF_BUCKET_CNT; b++ ) stats->bundle_rx_delay_hist.counts[ b ] = bundle_metrics[ MIDX( HISTOGRAM, BUNDLE, MESSAGE_RX_DELAY_NANOS ) + b ];
   }
 
-  stats->verify_drop_cnt = waterfall->out.verify_duplicate +
-                           waterfall->out.verify_parse +
-                           waterfall->out.verify_failed;
-  stats->verify_total_cnt = waterfall->in.gossip +
-                            waterfall->in.quic +
-                            waterfall->in.udp -
-                            waterfall->out.net_overrun -
-                            waterfall->out.tpu_quic_invalid -
-                            waterfall->out.tpu_udp_invalid -
-                            waterfall->out.quic_abandoned -
-                            waterfall->out.quic_frag_drop -
-                            waterfall->out.quic_overrun -
-                            waterfall->out.verify_overrun;
-  stats->dedup_drop_cnt = waterfall->out.dedup_duplicate;
-  stats->dedup_total_cnt = stats->verify_total_cnt -
-                           waterfall->out.verify_duplicate -
-                            waterfall->out.verify_parse -
-                            waterfall->out.verify_failed;
+  if( FD_LIKELY( waterfall ) ) {
+    stats->verify_drop_cnt = waterfall->out.verify_duplicate +
+                             waterfall->out.verify_parse +
+                             waterfall->out.verify_failed;
+    stats->verify_total_cnt = waterfall->in.gossip +
+                              waterfall->in.quic +
+                              waterfall->in.udp -
+                              waterfall->out.net_overrun -
+                              waterfall->out.tpu_quic_invalid -
+                              waterfall->out.tpu_udp_invalid -
+                              waterfall->out.quic_abandoned -
+                              waterfall->out.quic_frag_drop -
+                              waterfall->out.quic_overrun -
+                              waterfall->out.verify_overrun;
+    stats->dedup_drop_cnt = waterfall->out.dedup_duplicate;
+    stats->dedup_total_cnt = stats->verify_total_cnt -
+                             waterfall->out.verify_duplicate -
+                             waterfall->out.verify_parse -
+                             waterfall->out.verify_failed;
+    stats->bank_txn_exec_cnt = waterfall->out.block_fail + waterfall->out.block_success;
+  }
 
-  fd_topo_tile_t const * pack  = &topo->tiles[ fd_topo_find_tile( topo, "pack", 0UL ) ];
-  volatile ulong const * pack_metrics = fd_metrics_tile( pack->metrics );
-  stats->pack_buffer_cnt      = pack_metrics[ MIDX( GAUGE, PACK, AVAILABLE_TRANSACTIONS ) ];
-  stats->pack_buffer_capacity = pack->pack.max_pending_transactions;
-
-  stats->bank_txn_exec_cnt = waterfall->out.block_fail + waterfall->out.block_success;
+  ulong pack_tile_idx = fd_topo_find_tile( topo, "pack", 0UL );
+  if( FD_LIKELY( pack_tile_idx!=ULONG_MAX ) ) {
+    fd_topo_tile_t const * pack  = &topo->tiles[ pack_tile_idx ];
+    volatile ulong const * pack_metrics = fd_metrics_tile( pack->metrics );
+    stats->pack_buffer_cnt      = pack_metrics[ MIDX( GAUGE, PACK, AVAILABLE_TRANSACTIONS ) ];
+    stats->pack_buffer_capacity = pack->pack.max_pending_transactions;
+  }
 }
 
 static void
@@ -884,12 +888,15 @@ fd_gui_poll( fd_gui_t * gui, long now ) {
       fd_gui_txn_waterfall_snap( gui, gui->summary.txn_waterfall_current );
       fd_gui_printf_live_txn_waterfall( gui, gui->summary.txn_waterfall_reference, gui->summary.txn_waterfall_current, 0UL /* TODO: REAL NEXT LEADER SLOT */ );
       fd_http_server_ws_broadcast( gui->http );
-
-      *gui->summary.tile_stats_reference = *gui->summary.tile_stats_current;
-      fd_gui_tile_stats_snap( gui, gui->summary.txn_waterfall_current, gui->summary.tile_stats_current, now );
-      fd_gui_printf_live_tile_stats( gui, gui->summary.tile_stats_reference, gui->summary.tile_stats_current );
-      fd_http_server_ws_broadcast( gui->http );
     }
+
+    *gui->summary.tile_stats_reference = *gui->summary.tile_stats_current;
+    fd_gui_tile_stats_snap( gui,
+                            has_full_pipeline ? gui->summary.txn_waterfall_current : NULL,
+                            gui->summary.tile_stats_current,
+                            now );
+    fd_gui_printf_live_tile_stats( gui, gui->summary.tile_stats_reference, gui->summary.tile_stats_current );
+    fd_http_server_ws_broadcast( gui->http );
 
     if( FD_UNLIKELY( gui->summary.is_full_client && gui->summary.boot_progress.phase!=FD_GUI_BOOT_PROGRESS_TYPE_RUNNING ) ) {
       fd_gui_run_boot_progress( gui, now );

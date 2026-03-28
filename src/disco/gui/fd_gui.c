@@ -103,7 +103,9 @@ fd_gui_new( void *                shmem,
       gui->summary.boot_progress.phase = FD_GUI_BOOT_PROGRESS_TYPE_RUNNING;
     }
   } else {
-    gui->summary.startup_progress.phase = FD_GUI_START_PROGRESS_TYPE_INITIALIZING;
+    int has_plugin = fd_topo_find_tile( topo, "plugin", 0UL )!=ULONG_MAX;
+    gui->summary.startup_progress.phase = has_plugin ? FD_GUI_START_PROGRESS_TYPE_INITIALIZING
+                                                     : FD_GUI_START_PROGRESS_TYPE_RUNNING;
     gui->summary.startup_progress.startup_got_full_snapshot              = 0;
     gui->summary.startup_progress.startup_full_snapshot_slot             = 0;
     gui->summary.startup_progress.startup_incremental_snapshot_slot      = 0;
@@ -300,7 +302,9 @@ fd_gui_scheduler_counts_snap( fd_gui_t * gui, long now ) {
   fd_gui_scheduler_counts_t * cur = gui->summary.scheduler_counts_snap[ gui->summary.scheduler_counts_snap_idx ];
   gui->summary.scheduler_counts_snap_idx = (gui->summary.scheduler_counts_snap_idx+1UL)%FD_GUI_SCHEDULER_COUNT_SNAP_CNT;
 
-  fd_topo_tile_t const * pack = &gui->topo->tiles[ fd_topo_find_tile( gui->topo, "pack", 0UL ) ];
+  ulong pack_tile_idx = fd_topo_find_tile( gui->topo, "pack", 0UL );
+  if( FD_UNLIKELY( pack_tile_idx==ULONG_MAX ) ) return; /* no pack tile in relay mode */
+  fd_topo_tile_t const * pack = &gui->topo->tiles[ pack_tile_idx ];
   volatile ulong const * pack_metrics = fd_metrics_tile( pack->metrics );
 
   cur->sample_time_ns = now;
@@ -848,14 +852,17 @@ fd_gui_poll( fd_gui_t * gui, long now ) {
     fd_gui_printf_live_network_metrics( gui, gui->summary.network_stats_current );
     fd_http_server_ws_broadcast( gui->http );
 
-    fd_gui_txn_waterfall_snap( gui, gui->summary.txn_waterfall_current );
-    fd_gui_printf_live_txn_waterfall( gui, gui->summary.txn_waterfall_reference, gui->summary.txn_waterfall_current, 0UL /* TODO: REAL NEXT LEADER SLOT */ );
-    fd_http_server_ws_broadcast( gui->http );
+    int has_full_pipeline = fd_topo_find_tile( gui->topo, "pack", 0UL )!=ULONG_MAX;
+    if( FD_LIKELY( has_full_pipeline ) ) {
+      fd_gui_txn_waterfall_snap( gui, gui->summary.txn_waterfall_current );
+      fd_gui_printf_live_txn_waterfall( gui, gui->summary.txn_waterfall_reference, gui->summary.txn_waterfall_current, 0UL /* TODO: REAL NEXT LEADER SLOT */ );
+      fd_http_server_ws_broadcast( gui->http );
 
-    *gui->summary.tile_stats_reference = *gui->summary.tile_stats_current;
-    fd_gui_tile_stats_snap( gui, gui->summary.txn_waterfall_current, gui->summary.tile_stats_current, now );
-    fd_gui_printf_live_tile_stats( gui, gui->summary.tile_stats_reference, gui->summary.tile_stats_current );
-    fd_http_server_ws_broadcast( gui->http );
+      *gui->summary.tile_stats_reference = *gui->summary.tile_stats_current;
+      fd_gui_tile_stats_snap( gui, gui->summary.txn_waterfall_current, gui->summary.tile_stats_current, now );
+      fd_gui_printf_live_tile_stats( gui, gui->summary.tile_stats_reference, gui->summary.tile_stats_current );
+      fd_http_server_ws_broadcast( gui->http );
+    }
 
     if( FD_UNLIKELY( gui->summary.is_full_client && gui->summary.boot_progress.phase!=FD_GUI_BOOT_PROGRESS_TYPE_RUNNING ) ) {
       fd_gui_run_boot_progress( gui, now );

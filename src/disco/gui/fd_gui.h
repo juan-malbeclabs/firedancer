@@ -242,6 +242,17 @@ struct fd_gui_tile_timers {
 
   ulong caughtup_postfrag_ticks;
   ulong processing_postfrag_ticks;
+
+  int   in_backp;
+  uchar status;
+  ulong heartbeat;
+  ulong backp_cnt;
+  ulong nvcsw;
+  ulong nivcsw;
+
+  ushort last_cpu;
+  ulong  minflt;
+  ulong  majflt;
 };
 
 typedef struct fd_gui_tile_timers fd_gui_tile_timers_t;

@@ -6,7 +6,7 @@
 #include "../fd_metrics_base.h"
 #include "fd_metrics_enums.h"
 
-#define FD_METRICS_GAUGE_SNAPLD_STATE_OFF  (16UL)
+#define FD_METRICS_GAUGE_SNAPLD_STATE_OFF  (19UL)
 #define FD_METRICS_GAUGE_SNAPLD_STATE_NAME "snapld_state"
 #define FD_METRICS_GAUGE_SNAPLD_STATE_TYPE (FD_METRICS_TYPE_GAUGE)
 #define FD_METRICS_GAUGE_SNAPLD_STATE_DESC "State of the tile. 0=IDLE, 1=PROCESSING, 2=FINISHING, 3=ERROR, 4=SHUTDOWN"

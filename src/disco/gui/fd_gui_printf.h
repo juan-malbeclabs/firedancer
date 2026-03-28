@@ -129,6 +129,9 @@ void
 fd_gui_printf_live_tile_timers( fd_gui_t * gui );
 
 void
+fd_gui_printf_live_tile_metrics( fd_gui_t * gui );
+
+void
 fd_gui_printf_live_network_metrics( fd_gui_t *                     gui,
                                     fd_gui_network_stats_t const * cur );
 

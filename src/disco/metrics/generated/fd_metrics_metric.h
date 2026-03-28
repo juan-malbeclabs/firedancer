@@ -6,7 +6,7 @@
 #include "../fd_metrics_base.h"
 #include "fd_metrics_enums.h"
 
-#define FD_METRICS_GAUGE_METRIC_BOOT_TIMESTAMP_NANOS_OFF  (16UL)
+#define FD_METRICS_GAUGE_METRIC_BOOT_TIMESTAMP_NANOS_OFF  (19UL)
 #define FD_METRICS_GAUGE_METRIC_BOOT_TIMESTAMP_NANOS_NAME "metric_boot_timestamp_nanos"
 #define FD_METRICS_GAUGE_METRIC_BOOT_TIMESTAMP_NANOS_TYPE (FD_METRICS_TYPE_GAUGE)
 #define FD_METRICS_GAUGE_METRIC_BOOT_TIMESTAMP_NANOS_DESC "Timestamp when validator was started (nanoseconds since epoch)"

@@ -762,6 +762,119 @@ fd_gui_printf_live_tile_stats( fd_gui_t *                  gui,
 }
 
 static void
+fd_gui_printf_tile_metrics( fd_gui_t *                   gui,
+                            fd_gui_tile_timers_t const * prev,
+                            fd_gui_tile_timers_t const * cur ) {
+  jsonp_open_array( gui->http, "timers" );
+  for( ulong i=0UL; i<gui->topo->tile_cnt; i++ ) {
+    fd_topo_tile_t const * tile = &gui->topo->tiles[ i ];
+
+    if( FD_UNLIKELY( !strncmp( tile->name, "bench", 5UL ) ) ) {
+      jsonp_null( gui->http, NULL );
+      continue;
+    }
+
+    ulong cur_ticks[8] = {
+      cur[ i ].caughtup_housekeeping_ticks,
+      cur[ i ].processing_housekeeping_ticks,
+      cur[ i ].backpressure_housekeeping_ticks,
+      cur[ i ].caughtup_prefrag_ticks,
+      cur[ i ].processing_prefrag_ticks,
+      cur[ i ].backpressure_prefrag_ticks,
+      cur[ i ].caughtup_postfrag_ticks,
+      cur[ i ].processing_postfrag_ticks,
+    };
+    ulong prev_ticks[8] = {
+      prev[ i ].caughtup_housekeeping_ticks,
+      prev[ i ].processing_housekeeping_ticks,
+      prev[ i ].backpressure_housekeeping_ticks,
+      prev[ i ].caughtup_prefrag_ticks,
+      prev[ i ].processing_prefrag_ticks,
+      prev[ i ].backpressure_prefrag_ticks,
+      prev[ i ].caughtup_postfrag_ticks,
+      prev[ i ].processing_postfrag_ticks,
+    };
+
+    ulong cur_total  = 0UL;
+    ulong prev_total = 0UL;
+    for( ulong j=0UL; j<8UL; j++ ) cur_total  += cur_ticks[ j ];
+    for( ulong j=0UL; j<8UL; j++ ) prev_total += prev_ticks[ j ];
+
+    if( FD_UNLIKELY( cur_total==prev_total ) ) {
+      jsonp_null( gui->http, NULL );
+    } else {
+      jsonp_open_array( gui->http, NULL );
+        for( ulong j=0UL; j<8UL; j++ ) {
+          double percent       = ((double)(cur_ticks[ j ] - prev_ticks[ j ]) / (double)(cur_total-prev_total)) * 100.0;
+          double percent_trunc = (double)((long)(percent * 100.0)) / 100.0;
+          jsonp_double( gui->http, NULL, percent_trunc );
+        }
+      jsonp_close_array( gui->http );
+    }
+  }
+  jsonp_close_array( gui->http );
+
+  jsonp_open_array( gui->http, "in_backp" );
+    for( ulong i=0UL; i<gui->topo->tile_cnt; i++ ) {
+      jsonp_bool( gui->http, NULL, cur[ i ].in_backp );
+    }
+  jsonp_close_array( gui->http );
+
+  jsonp_open_array( gui->http, "backp_msgs" );
+    for( ulong i=0UL; i<gui->topo->tile_cnt; i++ ) {
+      jsonp_ulong( gui->http, NULL, cur[ i ].backp_cnt );
+    }
+  jsonp_close_array( gui->http );
+
+  jsonp_open_array( gui->http, "alive" );
+    for( ulong i=0UL; i<gui->topo->tile_cnt; i++ ) {
+      jsonp_ulong( gui->http, NULL, fd_ulong_if( cur[ i ].status==2U, 2UL, (ulong)(cur[ i ].heartbeat>prev[ i ].heartbeat) ) );
+    }
+  jsonp_close_array( gui->http );
+
+  jsonp_open_array( gui->http, "nvcsw" );
+    for( ulong i=0UL; i<gui->topo->tile_cnt; i++ ) {
+      jsonp_ulong( gui->http, NULL, cur[ i ].nvcsw );
+    }
+  jsonp_close_array( gui->http );
+
+  jsonp_open_array( gui->http, "nivcsw" );
+    for( ulong i=0UL; i<gui->topo->tile_cnt; i++ ) {
+      jsonp_ulong( gui->http, NULL, cur[ i ].nivcsw );
+    }
+  jsonp_close_array( gui->http );
+
+  jsonp_open_array( gui->http, "last_cpu" );
+    for( ulong i=0UL; i<gui->topo->tile_cnt; i++ ) {
+      jsonp_ulong( gui->http, NULL, (ulong)cur[ i ].last_cpu );
+    }
+  jsonp_close_array( gui->http );
+
+  jsonp_open_array( gui->http, "minflt" );
+    for( ulong i=0UL; i<gui->topo->tile_cnt; i++ ) {
+      jsonp_ulong( gui->http, NULL, cur[ i ].minflt );
+    }
+  jsonp_close_array( gui->http );
+
+  jsonp_open_array( gui->http, "majflt" );
+    for( ulong i=0UL; i<gui->topo->tile_cnt; i++ ) {
+      jsonp_ulong( gui->http, NULL, cur[ i ].majflt );
+    }
+  jsonp_close_array( gui->http );
+}
+
+void
+fd_gui_printf_live_tile_metrics( fd_gui_t * gui ) {
+  fd_gui_tile_timers_t * cur  = gui->summary.tile_timers_snap[ (gui->summary.tile_timers_snap_idx+(FD_GUI_TILE_TIMER_SNAP_CNT-1UL))%FD_GUI_TILE_TIMER_SNAP_CNT ];
+  fd_gui_tile_timers_t * prev = gui->summary.tile_timers_snap[ (gui->summary.tile_timers_snap_idx+(FD_GUI_TILE_TIMER_SNAP_CNT-2UL))%FD_GUI_TILE_TIMER_SNAP_CNT ];
+  jsonp_open_envelope( gui->http, "summary", "live_tile_metrics" );
+    jsonp_open_object( gui->http, "value" );
+      fd_gui_printf_tile_metrics( gui, prev, cur );
+    jsonp_close_object( gui->http );
+  jsonp_close_envelope( gui->http );
+}
+
+static void
 fd_gui_printf_tile_timers( fd_gui_t *                   gui,
                            fd_gui_tile_timers_t const * prev,
                            fd_gui_tile_timers_t const * cur ) {

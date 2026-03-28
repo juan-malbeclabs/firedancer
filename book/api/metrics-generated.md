@@ -32,6 +32,9 @@
 | <span class="metrics-name">tile_&#8203;heartbeat</span> | gauge | The last UNIX timestamp in nanoseconds that the tile heartbeated. |
 | <span class="metrics-name">tile_&#8203;in_&#8203;backpressure</span> | gauge | Whether the tile is currently backpressured or not, either 1 or 0. |
 | <span class="metrics-name">tile_&#8203;backpressure_&#8203;count</span> | counter | Number of times the tile has had to wait for one of more consumers to catch up to resume publishing. |
+| <span class="metrics-name">tile_&#8203;last_&#8203;cpu</span> | gauge | The CPU that the tile last ran on, as reported by /proc/self/stat. |
+| <span class="metrics-name">tile_&#8203;page_&#8203;fault_&#8203;minor_&#8203;count</span> | counter | The number of minor page faults serviced by the tile, as reported by /proc/self/stat. |
+| <span class="metrics-name">tile_&#8203;page_&#8203;fault_&#8203;major_&#8203;count</span> | counter | The number of major page faults serviced by the tile, as reported by /proc/self/stat. |
 | <span class="metrics-name">tile_&#8203;regime_&#8203;duration_&#8203;nanos</span><br/>{tile_&#8203;regime="<span class="metrics-enum">caught_&#8203;up_&#8203;housekeeping</span>"} | counter | Mutually exclusive and exhaustive duration of time the tile spent in each of the regimes. (Caught up + Housekeeping) |
 | <span class="metrics-name">tile_&#8203;regime_&#8203;duration_&#8203;nanos</span><br/>{tile_&#8203;regime="<span class="metrics-enum">processing_&#8203;housekeeping</span>"} | counter | Mutually exclusive and exhaustive duration of time the tile spent in each of the regimes. (Processing + Housekeeping) |
 | <span class="metrics-name">tile_&#8203;regime_&#8203;duration_&#8203;nanos</span><br/>{tile_&#8203;regime="<span class="metrics-enum">backpressure_&#8203;housekeeping</span>"} | counter | Mutually exclusive and exhaustive duration of time the tile spent in each of the regimes. (Backpressure + Housekeeping) |

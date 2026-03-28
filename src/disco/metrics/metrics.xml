@@ -48,6 +48,9 @@ metric introduced.
     <gauge name="Heartbeat" summary="The last UNIX timestamp in nanoseconds that the tile heartbeated." />
     <gauge name="InBackpressure" summary="Whether the tile is currently backpressured or not, either 1 or 0." />
     <counter name="BackpressureCount" summary="Number of times the tile has had to wait for one of more consumers to catch up to resume publishing." />
+    <gauge name="LastCpu" summary="The CPU that the tile last ran on, as reported by /proc/self/stat." />
+    <counter name="PageFaultMinorCount" summary="The number of minor page faults serviced by the tile, as reported by /proc/self/stat." />
+    <counter name="PageFaultMajorCount" summary="The number of major page faults serviced by the tile, as reported by /proc/self/stat." />
     <counter name="RegimeDurationNanos" enum="TileRegime" converter="nanoseconds" summary="Mutually exclusive and exhaustive duration of time the tile spent in each of the regimes." />
 </common>
 

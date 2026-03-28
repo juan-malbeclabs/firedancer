@@ -19,6 +19,7 @@ typedef struct {
   ulong            tile_cnt;
   long             first_seen_died[ FD_TILE_MAX ];
   int              status_fds[ FD_TILE_MAX ];
+  int              stat_fds[ FD_TILE_MAX ];
   volatile ulong * metrics[ FD_TILE_MAX ];
 } fd_cswtch_ctx_t;
 
@@ -33,6 +34,41 @@ scratch_footprint( fd_topo_tile_t const * tile ) {
   ulong l = FD_LAYOUT_INIT;
   l = FD_LAYOUT_APPEND( l, alignof( fd_cswtch_ctx_t ), sizeof( fd_cswtch_ctx_t ) );
   return FD_LAYOUT_FINI( l, scratch_align() );
+}
+
+/* Parse /proc/<pid>/task/<tid>/stat and extract minflt (field 10),
+   majflt (field 12), and processor (field 39).  The stat file is a
+   single line; field 2 is the comm string enclosed in parens and may
+   contain spaces, so we skip past the closing ')' before counting
+   space-separated tokens.  Fields are 1-indexed in the kernel docs;
+   after the closing ')' the next token is field 3. */
+static void
+parse_stat( char const * contents,
+            ulong *      out_minflt,
+            ulong *      out_majflt,
+            ulong *      out_last_cpu ) {
+  /* Skip past comm "(...)": find last ')' in case comm contains '(' */
+  char const * p = strrchr( contents, ')' );
+  if( FD_UNLIKELY( !p ) ) return;
+  p++; /* character after ')' */
+
+  /* tokens after ')' are fields 3, 4, 5, ... (1-indexed)
+     We need:  minflt   = field 10  => token index 7   (10-3)
+               majflt   = field 12  => token index 9   (12-3)
+               processor= field 39  => token index 36  (39-3) */
+  ulong vals[ 37 ];
+  for( ulong t=0UL; t<37UL; t++ ) {
+    while( ' '==*p || '\t'==*p ) p++;
+    if( FD_UNLIKELY( !*p || *p=='\n' ) ) return;
+    char * endptr;
+    vals[ t ] = strtoul( p, &endptr, 10 );
+    if( FD_UNLIKELY( endptr==p ) ) return; /* no digit */
+    p = endptr;
+  }
+
+  *out_minflt   = vals[ 7  ];
+  *out_majflt   = vals[ 9  ];
+  *out_last_cpu = vals[ 36 ];
 }
 
 static void
@@ -84,6 +120,7 @@ before_credit( fd_cswtch_ctx_t *   ctx,
          just stop updating metrics for it. */
       if( FD_LIKELY( 2UL==ctx->metrics[ i ][ FD_METRICS_GAUGE_TILE_STATUS_OFF ] ) ) {
         ctx->status_fds[ i ] = -1; /* stop trying to read from it */
+        ctx->stat_fds[ i ]   = -1;
         continue;
       }
     }
@@ -141,6 +178,27 @@ before_credit( fd_cswtch_ctx_t *   ctx,
 
     if( FD_UNLIKELY( !found_voluntary   ) ) FD_LOG_ERR(( "voluntary_ctxt_switches not found" ));
     if( FD_UNLIKELY( !found_involuntary ) ) FD_LOG_ERR(( "nonvoluntary_ctxt_switches not found" ));
+
+    /* Read /proc/<pid>/task/<tid>/stat for minflt, majflt, last_cpu */
+    if( FD_LIKELY( -1!=ctx->stat_fds[ i ] ) ) {
+      if( FD_UNLIKELY( -1==lseek( ctx->stat_fds[ i ], 0, SEEK_SET ) ) ) FD_LOG_ERR(( "lseek failed (%i-%s)", errno, strerror( errno ) ));
+
+      char stat_buf[ 512 ] = {0};
+      ulong stat_len = 0UL;
+      while( 1 ) {
+        if( FD_UNLIKELY( stat_len>=sizeof( stat_buf ) ) ) FD_LOG_ERR(( "stat_buf overflow" ));
+        long n = read( ctx->stat_fds[ i ], stat_buf + stat_len, sizeof( stat_buf ) - stat_len );
+        if( FD_UNLIKELY( -1==n ) ) FD_LOG_ERR(( "read failed (%i-%s)", errno, strerror( errno ) ));
+        if( FD_LIKELY( 0==n ) ) break;
+        stat_len += (ulong)n;
+      }
+
+      ulong minflt = 0UL, majflt = 0UL, last_cpu = 0UL;
+      parse_stat( stat_buf, &minflt, &majflt, &last_cpu );
+      ctx->metrics[ i ][ FD_METRICS_COUNTER_TILE_PAGE_FAULT_MINOR_COUNT_OFF ] = minflt;
+      ctx->metrics[ i ][ FD_METRICS_COUNTER_TILE_PAGE_FAULT_MAJOR_COUNT_OFF ] = majflt;
+      ctx->metrics[ i ][ FD_METRICS_GAUGE_TILE_LAST_CPU_OFF                ] = last_cpu;
+    }
   }
 }
 
@@ -183,6 +241,13 @@ privileged_init( fd_topo_t *      topo,
            for the shut down process. */
         if( FD_LIKELY( 2UL!=ctx->metrics[ i ][ FD_METRICS_GAUGE_TILE_STATUS_OFF ] ) ) FD_LOG_ERR(( "open failed (%i-%s)", errno, strerror( errno ) ));
       }
+
+      FD_TEST( fd_cstr_printf_check( path, sizeof( path ), NULL, "/proc/%lu/task/%lu/stat", pid, tid ) );
+      ctx->stat_fds[ i ] = open( path, O_RDONLY );
+      if( FD_UNLIKELY( -1==ctx->stat_fds[ i ] ) ) {
+        if( FD_LIKELY( 2UL!=ctx->metrics[ i ][ FD_METRICS_GAUGE_TILE_STATUS_OFF ] ) ) FD_LOG_ERR(( "open failed (%i-%s)", errno, strerror( errno ) ));
+      }
+
       break;
     }
   }
@@ -226,7 +291,7 @@ populate_allowed_fds( fd_topo_t const *      topo,
   FD_SCRATCH_ALLOC_INIT( l, scratch );
   fd_cswtch_ctx_t * ctx = FD_SCRATCH_ALLOC_APPEND( l, alignof( fd_cswtch_ctx_t ), sizeof( fd_cswtch_ctx_t ) );
 
-  if( FD_UNLIKELY( out_fds_cnt<2UL+ctx->tile_cnt ) ) FD_LOG_ERR(( "out_fds_cnt %lu", out_fds_cnt ));
+  if( FD_UNLIKELY( out_fds_cnt<2UL+2UL*ctx->tile_cnt ) ) FD_LOG_ERR(( "out_fds_cnt %lu", out_fds_cnt ));
 
   ulong out_cnt = 0UL;
   out_fds[ out_cnt++ ] = 2; /* stderr */
@@ -234,6 +299,7 @@ populate_allowed_fds( fd_topo_t const *      topo,
     out_fds[ out_cnt++ ] = fd_log_private_logfile_fd(); /* logfile */
   for( ulong i=0UL; i<ctx->tile_cnt; i++ ) {
     if( -1!=ctx->status_fds[ i ] ) out_fds[ out_cnt++ ] = ctx->status_fds[ i ]; /* /proc/<pid>/task/<tid>/status descriptor */
+    if( -1!=ctx->stat_fds[ i ]   ) out_fds[ out_cnt++ ] = ctx->stat_fds[ i ];   /* /proc/<pid>/task/<tid>/stat descriptor */
   }
   return out_cnt;
 }

@@ -230,6 +230,7 @@ fd_gui_ws_open( fd_gui_t * gui,
     fd_gui_printf_completed_slot,
     fd_gui_printf_estimated_slot,
     fd_gui_printf_live_tile_timers,
+    fd_gui_printf_live_tile_metrics,
     fd_gui_printf_catch_up_history,
   };
 
@@ -281,6 +282,16 @@ fd_gui_tile_timers_snap( fd_gui_t * gui ) {
     cur[ i ].backpressure_prefrag_ticks      = tile_metrics[ MIDX( COUNTER, TILE, REGIME_DURATION_NANOS_BACKPRESSURE_PREFRAG ) ];
     cur[ i ].caughtup_postfrag_ticks         = tile_metrics[ MIDX( COUNTER, TILE, REGIME_DURATION_NANOS_CAUGHT_UP_POSTFRAG ) ];
     cur[ i ].processing_postfrag_ticks       = tile_metrics[ MIDX( COUNTER, TILE, REGIME_DURATION_NANOS_PROCESSING_POSTFRAG ) ];
+
+    cur[ i ].in_backp  = (int)tile_metrics[ MIDX( GAUGE,   TILE, IN_BACKPRESSURE                ) ];
+    cur[ i ].status    = (uchar)tile_metrics[ MIDX( GAUGE,   TILE, STATUS                         ) ];
+    cur[ i ].heartbeat = tile_metrics[ MIDX( GAUGE,   TILE, HEARTBEAT                       ) ];
+    cur[ i ].backp_cnt = tile_metrics[ MIDX( COUNTER, TILE, BACKPRESSURE_COUNT               ) ];
+    cur[ i ].nvcsw     = tile_metrics[ MIDX( COUNTER, TILE, CONTEXT_SWITCH_VOLUNTARY_COUNT   ) ];
+    cur[ i ].nivcsw    = tile_metrics[ MIDX( COUNTER, TILE, CONTEXT_SWITCH_INVOLUNTARY_COUNT ) ];
+    cur[ i ].last_cpu  = (ushort)tile_metrics[ MIDX( GAUGE,   TILE, LAST_CPU                  ) ];
+    cur[ i ].minflt    = tile_metrics[ MIDX( COUNTER, TILE, PAGE_FAULT_MINOR_COUNT     ) ];
+    cur[ i ].majflt    = tile_metrics[ MIDX( COUNTER, TILE, PAGE_FAULT_MAJOR_COUNT     ) ];
   }
 }
 
@@ -860,6 +871,7 @@ fd_gui_poll( fd_gui_t * gui, long now ) {
     fd_gui_tile_timers_snap( gui );
 
     fd_gui_printf_live_tile_timers( gui );
+    fd_gui_printf_live_tile_metrics( gui );
     fd_http_server_ws_broadcast( gui->http );
 
     fd_gui_scheduler_counts_snap( gui, now );

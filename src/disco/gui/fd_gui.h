@@ -282,7 +282,8 @@ struct fd_gui_network_stats {
     ulong mcast_shreds; /* count of shreds received on multicast port */
   } in;
   struct {
-    ulong turbine;
+    ulong turbine_unicast; /* shred_net bytes forwarded by net tiles (unicast) */
+    ulong turbine_mcast;   /* bytes forwarded by smcast tile to multicast groups */
     ulong gossip;
     ulong tpu;
     ulong repair;

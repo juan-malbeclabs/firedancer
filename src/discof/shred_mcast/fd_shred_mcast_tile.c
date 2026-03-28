@@ -69,6 +69,7 @@ typedef struct {
     ulong rx_turbine;
     ulong rx_mcast;
     ulong tx_mcast;
+    ulong tx_mcast_bytes;
     ulong dedup_skipped;
     ulong parse_failed;
     ulong rx_src_shreds[ FD_SHRED_MCAST_SRC_MAX ];
@@ -398,14 +399,16 @@ after_frag( fd_shred_mcast_ctx_t * ctx,
   }
 
   ctx->metrics.rx_turbine++;
-  ctx->metrics.tx_mcast += ctx->mcast_dst_cnt;
+  ctx->metrics.tx_mcast       += ctx->mcast_dst_cnt;
+  ctx->metrics.tx_mcast_bytes += ctx->mcast_dst_cnt * ctx->pkt_sz;
 }
 
 static void
 metrics_write( fd_shred_mcast_ctx_t * ctx ) {
   FD_MCNT_SET( SHRED_MCAST, RX_TURBINE_SHREDS, ctx->metrics.rx_turbine    );
   FD_MCNT_SET( SHRED_MCAST, RX_MCAST_SHREDS,   ctx->metrics.rx_mcast      );
-  FD_MCNT_SET( SHRED_MCAST, TX_MCAST_SHREDS,   ctx->metrics.tx_mcast      );
+  FD_MCNT_SET( SHRED_MCAST, TX_MCAST_SHREDS,   ctx->metrics.tx_mcast       );
+  FD_MCNT_SET( SHRED_MCAST, TX_MCAST_BYTES,    ctx->metrics.tx_mcast_bytes );
   FD_MCNT_SET( SHRED_MCAST, DEDUP_SKIPPED,     ctx->metrics.dedup_skipped );
   FD_MCNT_SET( SHRED_MCAST, PARSE_FAILED,      ctx->metrics.parse_failed  );
   for( ulong i=0UL; i<FD_SHRED_MCAST_SRC_MAX; i++ ) {

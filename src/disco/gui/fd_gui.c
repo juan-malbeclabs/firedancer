@@ -360,21 +360,29 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
   cur->in.mcast_new    = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_MCAST_NEW_CNT     ) );
   cur->in.turbine_dup  = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_TURBINE_DUP_CNT   ) );
 
-  cur->out.turbine = 0UL;
-  cur->out.repair  = 0UL;
-  cur->out.tpu     = 0UL;
+  cur->out.turbine_unicast = 0UL;
+  cur->out.repair          = 0UL;
+  cur->out.tpu             = 0UL;
   for( ulong i=0UL; i<net_tile_cnt; i++ ) {
     ulong net_tile_idx = fd_topo_find_tile( topo, "net", i );
     if( FD_UNLIKELY( net_tile_idx==ULONG_MAX ) ) continue;
     fd_topo_tile_t const * net = &topo->tiles[ net_tile_idx ];
     for( ulong j=0UL; j<net->in_cnt; j++ ) {
       if( FD_UNLIKELY( !strcmp( topo->links[ net->in_link_id[ j ] ].name, "shred_net" ) ) )
-        cur->out.turbine += fd_metrics_link_in( net->metrics, j )[ FD_METRICS_COUNTER_LINK_CONSUMED_SIZE_BYTES_OFF ];
+        cur->out.turbine_unicast += fd_metrics_link_in( net->metrics, j )[ FD_METRICS_COUNTER_LINK_CONSUMED_SIZE_BYTES_OFF ];
       if( FD_UNLIKELY( !strcmp( topo->links[ net->in_link_id[ j ] ].name, "repair_net" ) ) )
-        cur->out.repair  += fd_metrics_link_in( net->metrics, j )[ FD_METRICS_COUNTER_LINK_CONSUMED_SIZE_BYTES_OFF ];
+        cur->out.repair          += fd_metrics_link_in( net->metrics, j )[ FD_METRICS_COUNTER_LINK_CONSUMED_SIZE_BYTES_OFF ];
       if( FD_UNLIKELY( !strcmp( topo->links[ net->in_link_id[ j ] ].name, "send_net" ) ) )
-        cur->out.tpu     += fd_metrics_link_in( net->metrics, j )[ FD_METRICS_COUNTER_LINK_CONSUMED_SIZE_BYTES_OFF ];
+        cur->out.tpu             += fd_metrics_link_in( net->metrics, j )[ FD_METRICS_COUNTER_LINK_CONSUMED_SIZE_BYTES_OFF ];
     }
+  }
+
+  cur->out.turbine_mcast = 0UL;
+  ulong smcast_eg_idx = fd_topo_find_tile( topo, "smcast", 0UL );
+  if( FD_LIKELY( smcast_eg_idx!=ULONG_MAX ) ) {
+    fd_topo_tile_t const * smcast_eg = &topo->tiles[ smcast_eg_idx ];
+    volatile ulong const * sm_eg_met = fd_metrics_tile( smcast_eg->metrics );
+    cur->out.turbine_mcast = sm_eg_met[ FD_METRICS_COUNTER_SHRED_MCAST_TX_MCAST_BYTES_OFF ];
   }
 
   cur->in.repair = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_REPAIR_RCV_BYTES ) );

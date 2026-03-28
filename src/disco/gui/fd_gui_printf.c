@@ -680,11 +680,12 @@ fd_gui_printf_network_metrics( fd_gui_t *                     gui,
     jsonp_ulong( gui->http, NULL, cur->in.turbine_dup  );  /* idx 9: turbine duplicates */
   jsonp_close_array( gui->http );
   jsonp_open_array( gui->http, "egress" );
-    jsonp_ulong( gui->http, NULL, cur->out.turbine );
-    jsonp_ulong( gui->http, NULL, cur->out.gossip  );
-    jsonp_ulong( gui->http, NULL, cur->out.tpu     );
-    jsonp_ulong( gui->http, NULL, cur->out.repair  );
-    jsonp_ulong( gui->http, NULL, cur->out.metric  );
+    jsonp_ulong( gui->http, NULL, cur->out.turbine_unicast ); /* idx 0: turbine.unicast */
+    jsonp_ulong( gui->http, NULL, cur->out.turbine_mcast   ); /* idx 1: turbine.multicast */
+    jsonp_ulong( gui->http, NULL, cur->out.gossip          ); /* idx 2: gossip */
+    jsonp_ulong( gui->http, NULL, cur->out.tpu             ); /* idx 3: tpu */
+    jsonp_ulong( gui->http, NULL, cur->out.repair          ); /* idx 4: repair */
+    jsonp_ulong( gui->http, NULL, cur->out.metric          ); /* idx 5: metrics */
   jsonp_close_array( gui->http );
   jsonp_open_array( gui->http, "mcast_srcs" );
     for( ulong i=0UL; i<cur->mcast_src_cnt; i++ ) {

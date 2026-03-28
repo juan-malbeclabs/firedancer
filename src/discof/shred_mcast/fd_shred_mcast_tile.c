@@ -71,6 +71,8 @@ typedef struct {
     ulong tx_mcast;
     ulong dedup_skipped;
     ulong parse_failed;
+    ulong rx_src_shreds[ FD_SHRED_MCAST_SRC_MAX ];
+    ulong rx_src_bytes [ FD_SHRED_MCAST_SRC_MAX ];
   } metrics;
 } fd_shred_mcast_ctx_t;
 
@@ -326,6 +328,8 @@ before_credit( fd_shred_mcast_ctx_t * ctx,
 
       ctx->metrics.rx_mcast++;
       ctx->metrics.tx_mcast += ctx->mcast_dst_cnt;
+      ctx->metrics.rx_src_shreds[ s ]++;
+      ctx->metrics.rx_src_bytes [ s ] += raw_sz;
 
       /* Forward to the appropriate shred tile via stem (round-robin by sig) */
       if( FD_LIKELY( ctx->shred_tile_cnt > 0UL ) ) {
@@ -399,11 +403,15 @@ after_frag( fd_shred_mcast_ctx_t * ctx,
 
 static void
 metrics_write( fd_shred_mcast_ctx_t * ctx ) {
-  FD_MCNT_SET( SHRED_MCAST, RX_TURBINE_SHREDS, ctx->metrics.rx_turbine  );
-  FD_MCNT_SET( SHRED_MCAST, RX_MCAST_SHREDS,   ctx->metrics.rx_mcast    );
-  FD_MCNT_SET( SHRED_MCAST, TX_MCAST_SHREDS,   ctx->metrics.tx_mcast    );
-  FD_MCNT_SET( SHRED_MCAST, DEDUP_SKIPPED,      ctx->metrics.dedup_skipped );
-  FD_MCNT_SET( SHRED_MCAST, PARSE_FAILED,       ctx->metrics.parse_failed  );
+  FD_MCNT_SET( SHRED_MCAST, RX_TURBINE_SHREDS, ctx->metrics.rx_turbine    );
+  FD_MCNT_SET( SHRED_MCAST, RX_MCAST_SHREDS,   ctx->metrics.rx_mcast      );
+  FD_MCNT_SET( SHRED_MCAST, TX_MCAST_SHREDS,   ctx->metrics.tx_mcast      );
+  FD_MCNT_SET( SHRED_MCAST, DEDUP_SKIPPED,     ctx->metrics.dedup_skipped );
+  FD_MCNT_SET( SHRED_MCAST, PARSE_FAILED,      ctx->metrics.parse_failed  );
+  for( ulong i=0UL; i<FD_SHRED_MCAST_SRC_MAX; i++ ) {
+    fd_metrics_tl[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SHREDS_OFF + 2UL*i     ] = ctx->metrics.rx_src_shreds[ i ];
+    fd_metrics_tl[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SHREDS_OFF + 2UL*i+1UL ] = ctx->metrics.rx_src_bytes [ i ];
+  }
 }
 
 #define STEM_BURST (FD_SHRED_MCAST_RX_BURST)

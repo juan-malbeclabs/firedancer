@@ -686,6 +686,15 @@ fd_gui_printf_network_metrics( fd_gui_t *                     gui,
     jsonp_ulong( gui->http, NULL, cur->out.repair  );
     jsonp_ulong( gui->http, NULL, cur->out.metric  );
   jsonp_close_array( gui->http );
+  jsonp_open_array( gui->http, "mcast_srcs" );
+    for( ulong i=0UL; i<cur->mcast_src_cnt; i++ ) {
+      jsonp_open_object( gui->http, NULL );
+        jsonp_string( gui->http, "label",  cur->mcast_src_label [ i ] );
+        jsonp_ulong( gui->http, "shreds", cur->mcast_src_shreds[ i ] );
+        jsonp_ulong( gui->http, "bytes",  cur->mcast_src_bytes [ i ] );
+      jsonp_close_object( gui->http );
+    }
+  jsonp_close_array( gui->http );
 }
 
 void

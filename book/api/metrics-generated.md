@@ -1159,5 +1159,21 @@
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;tx_&#8203;mcast_&#8203;shreds</span> | counter | Number of shreds forwarded to the multicast destination address |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;dedup_&#8203;skipped</span> | counter | Number of shreds dropped because they were already seen from the other source |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;parse_&#8203;failed</span> | counter | Number of shreds dropped because fd_shred_parse() returned NULL |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src0_&#8203;shreds</span> | counter | Number of shreds received from multicast source 0 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src0_&#8203;bytes</span> | counter | Number of bytes received from multicast source 0 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src1_&#8203;shreds</span> | counter | Number of shreds received from multicast source 1 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src1_&#8203;bytes</span> | counter | Number of bytes received from multicast source 1 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src2_&#8203;shreds</span> | counter | Number of shreds received from multicast source 2 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src2_&#8203;bytes</span> | counter | Number of bytes received from multicast source 2 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src3_&#8203;shreds</span> | counter | Number of shreds received from multicast source 3 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src3_&#8203;bytes</span> | counter | Number of bytes received from multicast source 3 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src4_&#8203;shreds</span> | counter | Number of shreds received from multicast source 4 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src4_&#8203;bytes</span> | counter | Number of bytes received from multicast source 4 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src5_&#8203;shreds</span> | counter | Number of shreds received from multicast source 5 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src5_&#8203;bytes</span> | counter | Number of bytes received from multicast source 5 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src6_&#8203;shreds</span> | counter | Number of shreds received from multicast source 6 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src6_&#8203;bytes</span> | counter | Number of bytes received from multicast source 6 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src7_&#8203;shreds</span> | counter | Number of shreds received from multicast source 7 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src7_&#8203;bytes</span> | counter | Number of bytes received from multicast source 7 |
 
 </div>

@@ -398,6 +398,25 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
 
   cur->in.metric  = 0UL;
   cur->out.metric = 0UL;
+
+  /* Per-source multicast stats from smcast tile */
+  cur->mcast_src_cnt = 0UL;
+  ulong smcast_tile_idx = fd_topo_find_tile( topo, "smcast", 0UL );
+  if( FD_LIKELY( smcast_tile_idx!=ULONG_MAX ) ) {
+    fd_topo_tile_t const * smcast    = &topo->tiles[ smcast_tile_idx ];
+    volatile ulong const * sm_met    = fd_metrics_tile( smcast->metrics );
+    ulong                  src_cnt   = smcast->shred_mcast.mcast_src_cnt;
+    if( FD_UNLIKELY( src_cnt>FD_SHRED_MCAST_SRC_MAX ) ) src_cnt = FD_SHRED_MCAST_SRC_MAX;
+    cur->mcast_src_cnt = src_cnt;
+    for( ulong i=0UL; i<src_cnt; i++ ) {
+      cur->mcast_src_shreds[ i ] = sm_met[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SHREDS_OFF + 2UL*i     ];
+      cur->mcast_src_bytes [ i ] = sm_met[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SHREDS_OFF + 2UL*i+1UL ];
+      uint   ip   = smcast->shred_mcast.mcast_src_ips  [ i ];
+      ushort port = smcast->shred_mcast.mcast_src_ports [ i ];
+      fd_cstr_printf( cur->mcast_src_label[ i ], 24UL, NULL, "%u.%u.%u.%u:%u",
+                      ip & 0xFFU, (ip>>8) & 0xFFU, (ip>>16) & 0xFFU, (ip>>24) & 0xFFU, (uint)port );
+    }
+  }
 }
 
 /* Snapshot all of the data from metrics to construct a view of the

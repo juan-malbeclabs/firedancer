@@ -288,6 +288,12 @@ struct fd_gui_network_stats {
     ulong repair;
     ulong metric;
   } out;
+
+  /* Per-source multicast stats (from smcast tile) */
+  ulong mcast_src_cnt;
+  ulong mcast_src_shreds[ FD_SHRED_MCAST_SRC_MAX ];
+  ulong mcast_src_bytes [ FD_SHRED_MCAST_SRC_MAX ];
+  char  mcast_src_label [ FD_SHRED_MCAST_SRC_MAX ][ 24 ];
 };
 
 typedef struct fd_gui_network_stats fd_gui_network_stats_t;

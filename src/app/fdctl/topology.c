@@ -216,7 +216,7 @@ fd_topo_initialize( config_t * config ) {
     /**/                 fd_topob_link( topo, "ipecho_out",   "ipecho_out",   2UL,                                      0UL,                                 1UL );
     FOR(gossvf_tile_cnt) fd_topob_link( topo, "gossvf_gossi", "gossvf_gossi", config->net.ingress_buffer_size,          sizeof(fd_gossip_view_t)+FD_NET_MTU, 1UL );
     /**/                 fd_topob_link( topo, "gossip_gossv", "gossip_gossv", 65536UL*4UL,                              sizeof(fd_gossip_ping_update_t),     1UL );
-    /**/                 fd_topob_link( topo, "gossip_out",   "gossip_out",   65536UL*4UL,                              sizeof(fd_gossip_update_message_t),  1UL )->permit_no_consumers = 1;
+    /**/                 fd_topob_link( topo, "gossip_out",   "gossip_out",   65536UL*4UL,                              sizeof(fd_gossip_update_message_t),  1UL );
     /**/                 fd_topob_link( topo, "gossip_sign",  "gossip_sign",  128UL,                                    2048UL,                              1UL );
     /**/                 fd_topob_link( topo, "sign_gossip",  "sign_gossip",  128UL,                                    sizeof(fd_ed25519_sig_t),            1UL );
   }
@@ -390,6 +390,9 @@ fd_topo_initialize( config_t * config ) {
 
     /* shred tile: receives shred_version from ipecho so it can filter shreds correctly */
     FOR(shred_tile_cnt)  fd_topob_tile_in(    topo, "shred",  i,            "metric_in", "ipecho_out",   0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+
+    /* shred tile: receives contact info from gossip so it can compute turbine children for retransmit */
+    FOR(shred_tile_cnt)  fd_topob_tile_in(    topo, "shred",  i,            "metric_in", "gossip_out",   0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
   }
 
   /* For now the only plugin consumer is the GUI */

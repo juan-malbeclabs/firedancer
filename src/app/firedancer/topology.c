@@ -843,12 +843,12 @@ fd_topo_initialize( config_t * config ) {
     /* One mcast_shred link per shred tile — shred_mcast forwards mcast-received shreds back to each shred tile */
     FOR(shred_tile_cnt) fd_topob_link( topo, "mcast_shred", "mcast_shred", 1024UL, FD_SHRED_MAX_SZ, 1UL );
 
-    fd_topob_tile( topo, "shred_mcast", "shred_mcast", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 );
+    fd_topob_tile( topo, "smcast", "shred_mcast", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 );
 
-    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred",      i,    "shred_mcast", i );
-    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "shred_mcast", 0UL, "metric_in", "shred_mcast", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred",   i,    "shred_mcast", i );
+    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "smcast",  0UL, "metric_in", "shred_mcast", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
 
-    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred_mcast", 0UL, "mcast_shred", i );
+    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "smcast",  0UL, "mcast_shred", i );
     FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "shred",       i,   "metric_in", "mcast_shred", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
   }
 
@@ -1455,7 +1455,7 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     fd_cstr_ncpy( tile->txproc.log_path,      config->tiles.txproc.log_path,      sizeof(tile->txproc.log_path)      );
     fd_cstr_ncpy( tile->txproc.swap_log_path, config->tiles.txproc.swap_log_path, sizeof(tile->txproc.swap_log_path) );
 
-  } else if( FD_UNLIKELY( !strcmp( tile->name, "shred_mcast" ) ) ) {
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "smcast" ) ) ) {
 
     ulong src_cnt = config->tiles.shred_mcast.mcast_srcs_cnt;
     if( FD_UNLIKELY( src_cnt > FD_SHRED_MCAST_SRC_MAX ) )

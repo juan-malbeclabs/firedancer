@@ -421,7 +421,7 @@ metrics_write( fd_shred_mcast_ctx_t * ctx ) {
 #include "../../disco/stem/fd_stem.c"
 
 fd_topo_run_tile_t fd_tile_shred_mcast = {
-  .name                     = "shred_mcast",
+  .name                     = "smcast",
   .populate_allowed_seccomp = populate_allowed_seccomp,
   .populate_allowed_fds     = populate_allowed_fds,
   .scratch_align            = scratch_align,

@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <pthread.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 #define NAME "run-agave"
@@ -148,19 +149,35 @@ agave_boot( config_t const * config ) {
   if( config->frankendancer.rpc.bigtable_ledger_storage ) ADD1( "--enable-rpc-bigtable-ledger-storage" );
 
   /* snapshots */
-  if( !config->frankendancer.snapshots.enabled ) {
+  int relay_mode = !strcmp( config->layout.mode, "shred_relay" );
+  char relay_snap_path[ 128 ];
+  if( FD_UNLIKELY( relay_mode ) ) {
+    /* In relay mode we do not need consensus state.  Point Agave at a
+       fresh empty snapshot directory so it starts from genesis instead
+       of spending minutes loading a multi-GB snapshot off disk.
+       The directory name is stable across restarts but isolated per
+       user/validator name to avoid collisions. */
+    FD_TEST( fd_cstr_printf_check( relay_snap_path, sizeof( relay_snap_path ), NULL,
+                                   "/tmp/fd_relay_snap_%s", config->name ) );
+    if( FD_UNLIKELY( mkdir( relay_snap_path, 0755 ) && errno!=EEXIST ) )
+      FD_LOG_ERR(( "mkdir %s failed (%i-%s)", relay_snap_path, errno, strerror( errno ) ));
     ADD1( "--no-snapshots" );
+    ADD( "--snapshots", relay_snap_path );
   } else {
-    if( !config->frankendancer.snapshots.incremental_snapshots ) {
-      ADD1( "--no-incremental-snapshots" );
-      ADDU( "--snapshot-interval-slots", config->frankendancer.snapshots.full_snapshot_interval_slots );
+    if( !config->frankendancer.snapshots.enabled ) {
+      ADD1( "--no-snapshots" );
     } else {
-      ADDU( "--full-snapshot-interval-slots", config->frankendancer.snapshots.full_snapshot_interval_slots );
-      ADDU( "--snapshot-interval-slots", config->frankendancer.snapshots.incremental_snapshot_interval_slots );
+      if( !config->frankendancer.snapshots.incremental_snapshots ) {
+        ADD1( "--no-incremental-snapshots" );
+        ADDU( "--snapshot-interval-slots", config->frankendancer.snapshots.full_snapshot_interval_slots );
+      } else {
+        ADDU( "--full-snapshot-interval-slots", config->frankendancer.snapshots.full_snapshot_interval_slots );
+        ADDU( "--snapshot-interval-slots", config->frankendancer.snapshots.incremental_snapshot_interval_slots );
+      }
     }
+    ADD( "--snapshots", config->frankendancer.snapshots.path );
+    if( strcmp( "", config->frankendancer.snapshots.incremental_path ) ) ADD( "--incremental-snapshot-archive-path", config->frankendancer.snapshots.incremental_path );
   }
-  ADD( "--snapshots", config->frankendancer.snapshots.path );
-  if( strcmp( "", config->frankendancer.snapshots.incremental_path ) ) ADD( "--incremental-snapshot-archive-path", config->frankendancer.snapshots.incremental_path );
   ADDU( "--maximum-snapshots-to-retain", config->frankendancer.snapshots.maximum_full_snapshots_to_retain );
   ADDU( "--maximum-incremental-snapshots-to-retain", config->frankendancer.snapshots.maximum_incremental_snapshots_to_retain );
   ADDU( "--maximum-snapshot-download-abort", config->frankendancer.snapshots.maximum_snapshot_download_abort );

@@ -391,9 +391,10 @@ fd_config_fill( fd_config_t * config,
       FD_LOG_ERR(( "[layout.mode] shred_relay requires [tiles.shred_mcast] enabled = true" ));
     if( FD_UNLIKELY( !config->consensus.expected_shred_version ) )
       FD_LOG_ERR(( "[layout.mode] shred_relay requires [consensus] expected_shred_version to be set" ));
-    /* In relay mode Agave must not fetch snapshots or genesis from the network */
+    /* In relay mode Agave must not fetch snapshots — it starts from genesis
+       using the existing genesis.bin in the ledger directory.  Genesis fetch
+       is left enabled so Agave can obtain genesis.bin if not already present. */
     config->frankendancer.consensus.snapshot_fetch = 0;
-    config->frankendancer.consensus.genesis_fetch  = 0;
   }
 
   fd_config_fill_net( config );

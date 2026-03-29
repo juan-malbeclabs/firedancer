@@ -1393,6 +1393,19 @@ user = ""
         # IP_MULTICAST_TTL for outgoing multicast packets (0 = default 1).
         mcast_ttl = 1
 
+    [tiles.txproc]
+        # Enable the txproc tile to log completed transactions to CSV.
+        # Requires [tiles.shred_mcast] enabled = true (or shred_relay mode).
+        enabled = false
+
+        # Path to the CSV transaction log file.  The tile appends one row
+        # per transaction to this file.  Leave empty to disable.
+        log_path = ""
+
+        # Path to an optional DEX/swap log file.  The tile appends one row
+        # per detected swap transaction.  Leave empty to disable.
+        swap_log_path = ""
+
     # TODO: DOCS
     [tiles.repair]
         repair_intake_listen_port = 8701

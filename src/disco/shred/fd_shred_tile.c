@@ -969,6 +969,7 @@ after_frag( fd_shred_ctx_t *    ctx,
       if( FD_LIKELY( fd_disco_netmux_sig_proto( sig ) != DST_PROTO_REPAIR ) &&
           FD_LIKELY( !ctx->in_is_mcast[ in_idx ] ) ) {
         /* Relay this shred — skip for repair responses and mcast-sourced shreds */
+        for( ulong i=0UL; i<ctx->adtl_dests_retransmit_cnt; i++ ) send_shred( ctx, stem, *out_shred, ctx->adtl_dests_retransmit+i, ctx->tsorig );
         ulong max_dest_cnt[1];
         do {
           /* If we've validated the shred and it COMPLETES but we can't
@@ -980,7 +981,6 @@ after_frag( fd_shred_ctx_t *    ctx,
           fd_shred_dest_idx_t * dests = fd_shred_dest_compute_children( sdest, &shred, 1UL, ctx->scratchpad_dests, 1UL, fanout, fanout, max_dest_cnt, use_chacha8 );
           if( FD_UNLIKELY( !dests ) ) break;
 
-          for( ulong i=0UL; i<ctx->adtl_dests_retransmit_cnt; i++ ) send_shred( ctx, stem, *out_shred, ctx->adtl_dests_retransmit+i, ctx->tsorig );
           for( ulong j=0UL; j<*max_dest_cnt; j++ ) send_shred( ctx, stem, *out_shred, fd_shred_dest_idx_to_dest( sdest, dests[ j ] ), ctx->tsorig );
         } while( 0 );
       }
@@ -1212,6 +1212,13 @@ after_frag( fd_shred_ctx_t *    ctx,
       if( !p_rcvd_test( set->parity_shred_rcvd, i ) )  new_shreds[ k++ ] = (fd_shred_t const *)set->parity_shreds[ i ];
 
     if( FD_UNLIKELY( !k ) ) return;
+
+    if( FD_LIKELY( ctx->in_kind[ in_idx ]==IN_KIND_NET ) ) {
+      for( ulong i=0UL; i<k; i++ ) {
+        for( ulong j=0UL; j<ctx->adtl_dests_retransmit_cnt; j++ ) send_shred( ctx, stem, new_shreds[ i ], ctx->adtl_dests_retransmit+j, ctx->tsorig );
+      }
+    }
+
     fd_shred_dest_t * sdest = fd_stake_ci_get_sdest_for_slot( ctx->stake_ci, new_shreds[ 0 ]->slot );
     if( FD_UNLIKELY( !sdest ) ) return;
     int use_chacha8 = ( new_shreds[ 0 ]->slot >= ctx->features_activation->switch_to_chacha8_turbine );
@@ -1220,9 +1227,6 @@ after_frag( fd_shred_ctx_t *    ctx,
     ulong max_dest_cnt[1];
     fd_shred_dest_idx_t * dests;
     if( FD_LIKELY( ctx->in_kind[ in_idx ]==IN_KIND_NET ) ) {
-      for( ulong i=0UL; i<k; i++ ) {
-        for( ulong j=0UL; j<ctx->adtl_dests_retransmit_cnt; j++ ) send_shred( ctx, stem, new_shreds[ i ], ctx->adtl_dests_retransmit+j, ctx->tsorig );
-      }
       out_stride = k;
       /* In the case of feature activation, the fanout used below is
           the same as the one calculated/modified previously at the

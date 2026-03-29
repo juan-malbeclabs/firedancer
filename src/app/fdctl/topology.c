@@ -817,7 +817,7 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     tile->gossip.ports.repair          = 0; /* relay does not do repair */
     tile->gossip.entrypoints_cnt           = config->gossip.entrypoints_cnt;
     fd_memcpy( tile->gossip.entrypoints, config->gossip.resolved_entrypoints, tile->gossip.entrypoints_cnt * sizeof(fd_ip4_port_t) );
-    tile->gossip.restrict_to_entrypoints   = 1;
+    tile->gossip.restrict_to_entrypoints   = 0; /* Must gossip with full cluster so our TVU is known and shreds are delivered */
 
   } else {
     FD_LOG_ERR(( "unknown tile name %lu `%s`", tile->id, tile->name ));

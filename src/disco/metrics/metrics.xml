@@ -1130,6 +1130,14 @@ metric introduced.
     <counter name="RxMcastSrc6Bytes"   summary="Number of bytes received from multicast source 6" />
     <counter name="RxMcastSrc7Shreds"  summary="Number of shreds received from multicast source 7" />
     <counter name="RxMcastSrc7Bytes"   summary="Number of bytes received from multicast source 7" />
+    <counter name="RxMcastSrc0Dedup"   summary="Shreds from multicast source 0 dropped as duplicates (lost the race)" />
+    <counter name="RxMcastSrc1Dedup"   summary="Shreds from multicast source 1 dropped as duplicates (lost the race)" />
+    <counter name="RxMcastSrc2Dedup"   summary="Shreds from multicast source 2 dropped as duplicates (lost the race)" />
+    <counter name="RxMcastSrc3Dedup"   summary="Shreds from multicast source 3 dropped as duplicates (lost the race)" />
+    <counter name="RxMcastSrc4Dedup"   summary="Shreds from multicast source 4 dropped as duplicates (lost the race)" />
+    <counter name="RxMcastSrc5Dedup"   summary="Shreds from multicast source 5 dropped as duplicates (lost the race)" />
+    <counter name="RxMcastSrc6Dedup"   summary="Shreds from multicast source 6 dropped as duplicates (lost the race)" />
+    <counter name="RxMcastSrc7Dedup"   summary="Shreds from multicast source 7 dropped as duplicates (lost the race)" />
 </tile>
 
 </metrics>

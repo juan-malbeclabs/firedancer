@@ -75,6 +75,7 @@ typedef struct {
     ulong parse_failed;
     ulong rx_src_shreds[ FD_SHRED_MCAST_SRC_MAX ];
     ulong rx_src_bytes [ FD_SHRED_MCAST_SRC_MAX ];
+    ulong rx_src_dedup [ FD_SHRED_MCAST_SRC_MAX ];
   } metrics;
 } fd_shred_mcast_ctx_t;
 
@@ -319,6 +320,7 @@ before_credit( fd_shred_mcast_ctx_t * ctx,
 
       if( dedup_check_and_set( ctx, shred->slot, is_code, global_i ) ) {
         ctx->metrics.dedup_skipped++;
+        ctx->metrics.rx_src_dedup[ s ]++;
         continue;
       }
 
@@ -417,6 +419,9 @@ metrics_write( fd_shred_mcast_ctx_t * ctx ) {
   for( ulong i=0UL; i<FD_SHRED_MCAST_SRC_MAX; i++ ) {
     fd_metrics_tl[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SHREDS_OFF + 2UL*i     ] = ctx->metrics.rx_src_shreds[ i ];
     fd_metrics_tl[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SHREDS_OFF + 2UL*i+1UL ] = ctx->metrics.rx_src_bytes [ i ];
+  }
+  for( ulong i=0UL; i<FD_SHRED_MCAST_SRC_MAX; i++ ) {
+    fd_metrics_tl[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_DEDUP_OFF + i ] = ctx->metrics.rx_src_dedup[ i ];
   }
 }
 

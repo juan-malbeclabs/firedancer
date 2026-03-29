@@ -1177,5 +1177,13 @@
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src6_&#8203;bytes</span> | counter | Number of bytes received from multicast source 6 |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src7_&#8203;shreds</span> | counter | Number of shreds received from multicast source 7 |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src7_&#8203;bytes</span> | counter | Number of bytes received from multicast source 7 |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src0_&#8203;dedup</span> | counter | Shreds from multicast source 0 dropped as duplicates (lost the race) |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src1_&#8203;dedup</span> | counter | Shreds from multicast source 1 dropped as duplicates (lost the race) |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src2_&#8203;dedup</span> | counter | Shreds from multicast source 2 dropped as duplicates (lost the race) |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src3_&#8203;dedup</span> | counter | Shreds from multicast source 3 dropped as duplicates (lost the race) |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src4_&#8203;dedup</span> | counter | Shreds from multicast source 4 dropped as duplicates (lost the race) |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src5_&#8203;dedup</span> | counter | Shreds from multicast source 5 dropped as duplicates (lost the race) |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src6_&#8203;dedup</span> | counter | Shreds from multicast source 6 dropped as duplicates (lost the race) |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src7_&#8203;dedup</span> | counter | Shreds from multicast source 7 dropped as duplicates (lost the race) |
 
 </div>

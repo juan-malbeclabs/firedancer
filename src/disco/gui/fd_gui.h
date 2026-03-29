@@ -298,6 +298,7 @@ struct fd_gui_network_stats {
   ulong mcast_src_cnt;
   ulong mcast_src_shreds[ FD_SHRED_MCAST_SRC_MAX ];
   ulong mcast_src_bytes [ FD_SHRED_MCAST_SRC_MAX ];
+  ulong mcast_src_dedup [ FD_SHRED_MCAST_SRC_MAX ];
   char  mcast_src_label [ FD_SHRED_MCAST_SRC_MAX ][ 24 ];
 };
 

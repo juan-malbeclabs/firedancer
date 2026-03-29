@@ -482,7 +482,7 @@ struct fd_config {
       int  enabled;
       char log_path[ PATH_MAX ];
       char swap_log_path[ PATH_MAX ];
-    } dexproc;
+    } dexfilter;
 
     struct {
       int    enabled;

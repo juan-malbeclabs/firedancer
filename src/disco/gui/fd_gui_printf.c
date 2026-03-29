@@ -685,7 +685,7 @@ fd_gui_printf_network_metrics( fd_gui_t *                     gui,
     jsonp_ulong( gui->http, NULL, cur->in.shred_processed[3] ); /* idx 14: ignored */
     jsonp_ulong( gui->http, NULL, cur->in.shred_processed[4] ); /* idx 15: okay */
     jsonp_ulong( gui->http, NULL, cur->in.shred_processed[5] ); /* idx 16: completes */
-    jsonp_ulong( gui->http, NULL, cur->in.dexproc_fec_sets    ); /* idx 17: FEC sets forwarded to dexproc */
+    jsonp_ulong( gui->http, NULL, cur->in.dexfilter_fec_sets    ); /* idx 17: FEC sets forwarded to dexfilter */
   jsonp_close_array( gui->http );
   jsonp_open_array( gui->http, "egress" );
     jsonp_ulong( gui->http, NULL, cur->out.turbine_unicast ); /* idx 0: turbine.unicast */
@@ -766,15 +766,15 @@ fd_gui_printf_tile_stats( fd_gui_t *                  gui,
     jsonp_double( gui->http, "poh", 0.0 );
     jsonp_double( gui->http, "shred", 0.0 );
     jsonp_double( gui->http, "store", 0.0 );
-    jsonp_ulong( gui->http, "dexproc_batches",       cur->dexproc_shredded_batches_received - prev->dexproc_shredded_batches_received );
-    jsonp_ulong( gui->http, "dexproc_dedup_skipped", cur->dexproc_dedup_skipped             - prev->dexproc_dedup_skipped             );
-    jsonp_ulong( gui->http, "dexproc_received",      cur->dexproc_transactions_received     - prev->dexproc_transactions_received     );
-    jsonp_ulong( gui->http, "dexproc_txns",          cur->dexproc_transactions_logged       - prev->dexproc_transactions_logged       );
-    jsonp_ulong( gui->http, "dexproc_votes_skipped", cur->dexproc_votes_skipped             - prev->dexproc_votes_skipped             );
-    jsonp_ulong( gui->http, "dexproc_parse_errors",  cur->dexproc_parse_errors              - prev->dexproc_parse_errors              );
-    jsonp_ulong( gui->http, "dexproc_dex_txns",      cur->dexproc_dex_transactions_logged   - prev->dexproc_dex_transactions_logged   );
-    jsonp_ulong( gui->http, "dexproc_write_errors",  cur->dexproc_write_errors              - prev->dexproc_write_errors              );
-    jsonp_ulong( gui->http, "dexproc_truncated",     cur->dexproc_entry_batches_truncated   - prev->dexproc_entry_batches_truncated   );
+    jsonp_ulong( gui->http, "dexfilter_batches",       cur->dexfilter_shredded_batches_received - prev->dexfilter_shredded_batches_received );
+    jsonp_ulong( gui->http, "dexfilter_dedup_skipped", cur->dexfilter_dedup_skipped             - prev->dexfilter_dedup_skipped             );
+    jsonp_ulong( gui->http, "dexfilter_received",      cur->dexfilter_transactions_received     - prev->dexfilter_transactions_received     );
+    jsonp_ulong( gui->http, "dexfilter_txns",          cur->dexfilter_transactions_logged       - prev->dexfilter_transactions_logged       );
+    jsonp_ulong( gui->http, "dexfilter_votes_skipped", cur->dexfilter_votes_skipped             - prev->dexfilter_votes_skipped             );
+    jsonp_ulong( gui->http, "dexfilter_parse_errors",  cur->dexfilter_parse_errors              - prev->dexfilter_parse_errors              );
+    jsonp_ulong( gui->http, "dexfilter_dex_txns",      cur->dexfilter_dex_transactions_logged   - prev->dexfilter_dex_transactions_logged   );
+    jsonp_ulong( gui->http, "dexfilter_write_errors",  cur->dexfilter_write_errors              - prev->dexfilter_write_errors              );
+    jsonp_ulong( gui->http, "dexfilter_truncated",     cur->dexfilter_entry_batches_truncated   - prev->dexfilter_entry_batches_truncated   );
   jsonp_close_object( gui->http );
 }
 

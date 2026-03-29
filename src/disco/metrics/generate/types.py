@@ -39,7 +39,7 @@ class Tile(Enum):
     EXEC = 33
     SNAPWR = 34
     BENCHS = 35
-    DEXPROC = 36
+    DEXFILTER = 36
     SHRED_MCAST = 37
 
 class MetricType(Enum):

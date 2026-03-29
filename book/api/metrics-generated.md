@@ -460,7 +460,7 @@
 | <span class="metrics-name">shred_&#8203;shred_&#8203;mcast_&#8203;rcv_&#8203;bytes</span> | counter | Bytes received on the multicast port (includes network headers) |
 | <span class="metrics-name">shred_&#8203;shred_&#8203;mcast_&#8203;new_&#8203;cnt</span> | counter | Multicast shreds that arrived before the turbine unicast copy |
 | <span class="metrics-name">shred_&#8203;shred_&#8203;turbine_&#8203;dup_&#8203;cnt</span> | counter | Turbine unicast shreds that were duplicates (multicast already delivered them) |
-| <span class="metrics-name">shred_&#8203;shred_&#8203;fec_&#8203;sets_&#8203;completed</span> | counter | FEC sets forwarded to the txproc tile |
+| <span class="metrics-name">shred_&#8203;shred_&#8203;fec_&#8203;sets_&#8203;completed</span> | counter | FEC sets forwarded to the dexfilter tile |
 | <span class="metrics-name">shred_&#8203;store_&#8203;insert_&#8203;wait</span> | histogram | Time in seconds spent waiting for the store to insert a new FEC set |
 | <span class="metrics-name">shred_&#8203;store_&#8203;insert_&#8203;work</span> | histogram | Time in seconds spent on inserting a new FEC set |
 
@@ -1129,22 +1129,22 @@
 
 </div>
 
-## Dexproc Tile
+## Dexfilter Tile
 
 <div class="metrics">
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| <span class="metrics-name">dexproc_&#8203;shredded_&#8203;batches_&#8203;received</span> | counter | Total entry batches received from shred tiles, including duplicates from multiple shred tiles |
-| <span class="metrics-name">dexproc_&#8203;dedup_&#8203;skipped</span> | counter | Number of entry batches skipped because the same FEC set was already processed from another shred tile |
-| <span class="metrics-name">dexproc_&#8203;fec_&#8203;sets_&#8203;processed</span> | counter | Unique FEC sets processed after dedup (ShreddedBatchesReceived - DedupSkipped) |
-| <span class="metrics-name">dexproc_&#8203;transactions_&#8203;received</span> | counter | Number of transactions successfully parsed before any filtering |
-| <span class="metrics-name">dexproc_&#8203;transactions_&#8203;logged</span> | counter | Number of transactions written to the CSV log |
-| <span class="metrics-name">dexproc_&#8203;votes_&#8203;skipped</span> | counter | Number of vote transactions skipped |
-| <span class="metrics-name">dexproc_&#8203;parse_&#8203;errors</span> | counter | Number of entry batches aborted due to a transaction parse failure; transactions after the failure in that batch are not counted |
-| <span class="metrics-name">dexproc_&#8203;dex_&#8203;transactions_&#8203;logged</span> | counter | Number of DEX/swap transactions written to the swap log |
-| <span class="metrics-name">dexproc_&#8203;write_&#8203;errors</span> | counter | Number of write errors to the CSV log |
-| <span class="metrics-name">dexproc_&#8203;entry_&#8203;batches_&#8203;truncated</span> | counter | Number of entry batches truncated due to exceeding maximum size |
+| <span class="metrics-name">dexfilter_&#8203;shredded_&#8203;batches_&#8203;received</span> | counter | Total entry batches received from shred tiles, including duplicates from multiple shred tiles |
+| <span class="metrics-name">dexfilter_&#8203;dedup_&#8203;skipped</span> | counter | Number of entry batches skipped because the same FEC set was already processed from another shred tile |
+| <span class="metrics-name">dexfilter_&#8203;fec_&#8203;sets_&#8203;processed</span> | counter | Unique FEC sets processed after dedup (ShreddedBatchesReceived - DedupSkipped) |
+| <span class="metrics-name">dexfilter_&#8203;transactions_&#8203;received</span> | counter | Number of transactions successfully parsed before any filtering |
+| <span class="metrics-name">dexfilter_&#8203;transactions_&#8203;logged</span> | counter | Number of transactions written to the CSV log |
+| <span class="metrics-name">dexfilter_&#8203;votes_&#8203;skipped</span> | counter | Number of vote transactions skipped |
+| <span class="metrics-name">dexfilter_&#8203;parse_&#8203;errors</span> | counter | Number of entry batches aborted due to a transaction parse failure; transactions after the failure in that batch are not counted |
+| <span class="metrics-name">dexfilter_&#8203;dex_&#8203;transactions_&#8203;logged</span> | counter | Number of DEX/swap transactions written to the swap log |
+| <span class="metrics-name">dexfilter_&#8203;write_&#8203;errors</span> | counter | Number of write errors to the CSV log |
+| <span class="metrics-name">dexfilter_&#8203;entry_&#8203;batches_&#8203;truncated</span> | counter | Number of entry batches truncated due to exceeding maximum size |
 
 </div>
 

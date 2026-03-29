@@ -844,6 +844,7 @@ fd_topo_initialize( config_t * config ) {
     FOR(shred_tile_cnt) fd_topob_link( topo, "mcast_shred", "mcast_shred", 1024UL, FD_SHRED_MAX_SZ, 1UL );
 
     fd_topob_tile( topo, "smcast", "shred_mcast", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 );
+    strncpy( topo->tiles[ topo->tile_cnt-1UL ].metrics_name, "shred_mcast", 13UL );
 
     FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred",   i,    "shred_mcast", i );
     FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "smcast",  0UL, "metric_in", "shred_mcast", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );

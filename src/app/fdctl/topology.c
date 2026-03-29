@@ -618,10 +618,12 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
   if( FD_UNLIKELY( !strcmp( tile->name, "net" ) || !strcmp( tile->name, "sock" ) ) ) {
 
     tile->net.shred_listen_port              = config->tiles.shred.shred_listen_port;
-    tile->net.quic_transaction_listen_port   = config->tiles.quic.quic_transaction_listen_port;
-    tile->net.legacy_transaction_listen_port = config->tiles.quic.regular_transaction_listen_port;
-    if( FD_UNLIKELY( !strcmp( config->layout.mode, "shred_relay" ) ) )
-      tile->net.gossip_listen_port           = config->gossip.port;
+    if( FD_LIKELY( strcmp( config->layout.mode, "shred_relay" ) ) ) {
+      tile->net.quic_transaction_listen_port   = config->tiles.quic.quic_transaction_listen_port;
+      tile->net.legacy_transaction_listen_port = config->tiles.quic.regular_transaction_listen_port;
+    } else {
+      tile->net.gossip_listen_port             = config->gossip.port;
+    }
 
   } else if( FD_UNLIKELY( !strcmp( tile->name, "netlnk" ) ) ) {
 

@@ -357,8 +357,9 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
   cur->in.shreds       = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_TURBINE_RCV       ) );
   cur->in.mcast_shreds = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_MCAST_RCV         ) );
   cur->in.mcast_bytes  = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_MCAST_RCV_BYTES   ) );
-  cur->in.mcast_new    = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_MCAST_NEW_CNT     ) );
-  cur->in.turbine_dup  = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_TURBINE_DUP_CNT   ) );
+  cur->in.mcast_new       = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_MCAST_NEW_CNT      ) );
+  cur->in.turbine_dup     = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_TURBINE_DUP_CNT    ) );
+  cur->in.txproc_fec_sets = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_FEC_SETS_COMPLETED  ) );
 
   cur->out.turbine_unicast = 0UL;
   cur->out.repair          = 0UL;

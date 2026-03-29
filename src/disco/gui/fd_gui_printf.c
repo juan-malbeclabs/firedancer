@@ -674,10 +674,11 @@ fd_gui_printf_network_metrics( fd_gui_t *                     gui,
     jsonp_ulong( gui->http, NULL, cur->in.tpu          );  /* idx 3 */
     jsonp_ulong( gui->http, NULL, cur->in.repair       );  /* idx 4 */
     jsonp_ulong( gui->http, NULL, cur->in.metric       );  /* idx 5 */
-    jsonp_ulong( gui->http, NULL, cur->in.shreds       );  /* idx 6: turbine shreds/s */
-    jsonp_ulong( gui->http, NULL, cur->in.mcast_shreds );  /* idx 7: mcast shreds/s */
-    jsonp_ulong( gui->http, NULL, cur->in.mcast_new    );  /* idx 8: mcast shreds that arrived first */
-    jsonp_ulong( gui->http, NULL, cur->in.turbine_dup  );  /* idx 9: turbine duplicates */
+    jsonp_ulong( gui->http, NULL, cur->in.shreds          );  /* idx 6: turbine shreds/s */
+    jsonp_ulong( gui->http, NULL, cur->in.mcast_shreds    );  /* idx 7: mcast shreds/s */
+    jsonp_ulong( gui->http, NULL, cur->in.mcast_new       );  /* idx 8: mcast shreds that arrived first */
+    jsonp_ulong( gui->http, NULL, cur->in.turbine_dup     );  /* idx 9: turbine duplicates */
+    jsonp_ulong( gui->http, NULL, cur->in.txproc_fec_sets );  /* idx 10: FEC sets forwarded to txproc */
   jsonp_close_array( gui->http );
   jsonp_open_array( gui->http, "egress" );
     jsonp_ulong( gui->http, NULL, cur->out.turbine_unicast ); /* idx 0: turbine.unicast */

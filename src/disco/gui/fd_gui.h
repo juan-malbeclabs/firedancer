@@ -278,8 +278,9 @@ struct fd_gui_network_stats {
     ulong tpu;
     ulong repair;
     ulong metric;
-    ulong shreds;       /* count of turbine shreds received */
-    ulong mcast_shreds; /* count of shreds received on multicast port */
+    ulong shreds;           /* count of turbine shreds received */
+    ulong mcast_shreds;     /* count of shreds received on multicast port */
+    ulong txproc_fec_sets;  /* FEC sets forwarded to txproc tile */
   } in;
   struct {
     ulong turbine_unicast; /* shred_net bytes forwarded by net tiles (unicast) */

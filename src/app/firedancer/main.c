@@ -125,7 +125,7 @@ extern fd_topo_run_tile_t fd_tile_snapla;
 extern fd_topo_run_tile_t fd_tile_snapls;
 extern fd_topo_run_tile_t fd_tile_snaplh;
 extern fd_topo_run_tile_t fd_tile_snaplv;
-extern fd_topo_run_tile_t fd_tile_txproc;
+extern fd_topo_run_tile_t fd_tile_dexproc;
 extern fd_topo_run_tile_t fd_tile_shred_mcast;
 
 fd_topo_run_tile_t * TILES[] = {
@@ -172,7 +172,7 @@ fd_topo_run_tile_t * TILES[] = {
   &fd_tile_ipecho,
   &fd_tile_vinyl,
   &fd_tile_solcap,
-  &fd_tile_txproc,
+  &fd_tile_dexproc,
   &fd_tile_shred_mcast,
   NULL,
 };

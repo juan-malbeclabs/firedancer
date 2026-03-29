@@ -480,16 +480,16 @@ fd_topo_initialize( config_t * config ) {
     }
   }
 
-  if( FD_UNLIKELY( config->tiles.txproc.enabled ) ) {
-    fd_topob_wksp( topo, "shred_txproc" );
-    fd_topob_wksp( topo, "txproc" );
+  if( FD_UNLIKELY( config->tiles.dexproc.enabled ) ) {
+    fd_topob_wksp( topo, "shred_dexproc" );
+    fd_topob_wksp( topo, "dexproc" );
 
-    FOR(shred_tile_cnt) fd_topob_link( topo, "shred_txproc", "shred_txproc", 1024UL, 65536UL, 1UL );
+    FOR(shred_tile_cnt) fd_topob_link( topo, "shred_dexproc", "shred_dexproc", 1024UL, 65536UL, 1UL );
 
-    fd_topob_tile( topo, "txproc", "txproc", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 );
+    fd_topob_tile( topo, "dexproc", "dexproc", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 );
 
-    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred",  i,      "shred_txproc", i );
-    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "txproc", 0UL, "metric_in", "shred_txproc", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred",  i,      "shred_dexproc", i );
+    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "dexproc", 0UL, "metric_in", "shred_dexproc", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
   }
 
   if( FD_UNLIKELY( config->tiles.shred_mcast.enabled ) ) {
@@ -798,10 +798,10 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     tile->gossvf.entrypoints_cnt       = config->gossip.entrypoints_cnt;
     fd_memcpy( tile->gossvf.entrypoints, config->gossip.resolved_entrypoints, tile->gossvf.entrypoints_cnt * sizeof(fd_ip4_port_t) );
 
-  } else if( FD_UNLIKELY( !strcmp( tile->name, "txproc" ) ) ) {
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "dexproc" ) ) ) {
 
-    fd_cstr_ncpy( tile->txproc.log_path,      config->tiles.txproc.log_path,      sizeof(tile->txproc.log_path)      );
-    fd_cstr_ncpy( tile->txproc.swap_log_path, config->tiles.txproc.swap_log_path, sizeof(tile->txproc.swap_log_path) );
+    fd_cstr_ncpy( tile->dexproc.log_path,      config->tiles.dexproc.log_path,      sizeof(tile->dexproc.log_path)      );
+    fd_cstr_ncpy( tile->dexproc.swap_log_path, config->tiles.dexproc.swap_log_path, sizeof(tile->dexproc.swap_log_path) );
 
   } else if( FD_UNLIKELY( !strcmp( tile->name, "gossip" ) ) ) {
 

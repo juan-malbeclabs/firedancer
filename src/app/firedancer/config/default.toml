@@ -1393,8 +1393,8 @@ user = ""
         # IP_MULTICAST_TTL for outgoing multicast packets (0 = default 1).
         mcast_ttl = 1
 
-    [tiles.txproc]
-        # Enable the txproc tile to log completed transactions to CSV.
+    [tiles.dexproc]
+        # Enable the dexproc tile to log completed transactions to CSV.
         # Requires [tiles.shred_mcast] enabled = true (or shred_relay mode).
         enabled = false
 

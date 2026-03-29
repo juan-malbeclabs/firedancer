@@ -282,7 +282,7 @@ struct fd_gui_network_stats {
     ulong mcast_shreds;     /* count of shreds received on multicast port */
     ulong dedup_skipped;    /* shreds dropped by smcast tile as duplicates (seen from other source) */
     ulong shred_processed[6]; /* FEC resolver result: [0]=bad_slot [1]=parse_failed [2]=rejected [3]=ignored [4]=okay [5]=completes */
-    ulong txproc_fec_sets;  /* FEC sets forwarded to txproc tile */
+    ulong dexproc_fec_sets;  /* FEC sets forwarded to dexproc tile */
   } in;
   struct {
     ulong turbine_unicast; /* shred_net bytes forwarded by net tiles (unicast) */
@@ -522,15 +522,15 @@ struct fd_gui_tile_stats {
   ulong bank_txn_exec_cnt;         /* Number of transactions processed by the bank tile */
   ulong net_out_tx_bytes;          /* Number of bytes sent by the net or sock tile */
 
-  ulong txproc_shredded_batches_received; /* Shredded batches received (incl. duplicates from multiple shred tiles) */
-  ulong txproc_dedup_skipped;             /* Entry batches skipped as duplicates */
-  ulong txproc_transactions_received;     /* Transactions successfully parsed before filtering */
-  ulong txproc_transactions_logged;       /* Transactions written to CSV log */
-  ulong txproc_votes_skipped;             /* Vote transactions skipped */
-  ulong txproc_parse_errors;              /* Entry batches aborted due to parse failure */
-  ulong txproc_dex_transactions_logged;   /* DEX/swap transactions written to swap log */
-  ulong txproc_write_errors;              /* Write errors to CSV log */
-  ulong txproc_entry_batches_truncated;   /* Entry batches truncated due to exceeding max size */
+  ulong dexproc_shredded_batches_received; /* Shredded batches received (incl. duplicates from multiple shred tiles) */
+  ulong dexproc_dedup_skipped;             /* Entry batches skipped as duplicates */
+  ulong dexproc_transactions_received;     /* Transactions successfully parsed before filtering */
+  ulong dexproc_transactions_logged;       /* Transactions written to CSV log */
+  ulong dexproc_votes_skipped;             /* Vote transactions skipped */
+  ulong dexproc_parse_errors;              /* Entry batches aborted due to parse failure */
+  ulong dexproc_dex_transactions_logged;   /* DEX/swap transactions written to swap log */
+  ulong dexproc_write_errors;              /* Write errors to CSV log */
+  ulong dexproc_entry_batches_truncated;   /* Entry batches truncated due to exceeding max size */
 };
 
 typedef struct fd_gui_tile_stats fd_gui_tile_stats_t;

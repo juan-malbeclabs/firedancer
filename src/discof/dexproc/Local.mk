@@ -1,5 +1,5 @@
 ifdef FD_HAS_HOSTED
 ifdef FD_HAS_ALLOCA
-$(call add-objs,fd_txproc_tile,fd_discof)
+$(call add-objs,fd_dexproc_tile,fd_discof)
 endif
 endif

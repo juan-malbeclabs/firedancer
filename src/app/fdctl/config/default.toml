@@ -1397,7 +1397,7 @@ dynamic_port_range = "8900-9000"
         additional_shred_destinations_retransmit = []
         additional_shred_destinations_leader = []
 
-    [tiles.txproc]
+    [tiles.dexproc]
         enabled = false
         log_path = ""
         swap_log_path = ""

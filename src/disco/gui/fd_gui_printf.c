@@ -885,8 +885,8 @@ fd_gui_printf_tile_metrics( fd_gui_t *                   gui,
 
 void
 fd_gui_printf_live_tile_metrics( fd_gui_t * gui ) {
-  fd_gui_tile_timers_t * cur  = gui->summary.tile_timers_snap[ (gui->summary.tile_timers_snap_idx+(FD_GUI_TILE_TIMER_SNAP_CNT-1UL))%FD_GUI_TILE_TIMER_SNAP_CNT ];
-  fd_gui_tile_timers_t * prev = gui->summary.tile_timers_snap[ (gui->summary.tile_timers_snap_idx+(FD_GUI_TILE_TIMER_SNAP_CNT-2UL))%FD_GUI_TILE_TIMER_SNAP_CNT ];
+  fd_gui_tile_timers_t * cur  = gui->summary.tile_timers_snap[ (gui->summary.tile_timers_snap_idx+(FD_GUI_TILE_TIMER_SNAP_CNT- 1UL))%FD_GUI_TILE_TIMER_SNAP_CNT ];
+  fd_gui_tile_timers_t * prev = gui->summary.tile_timers_snap[ (gui->summary.tile_timers_snap_idx+(FD_GUI_TILE_TIMER_SNAP_CNT-50UL))%FD_GUI_TILE_TIMER_SNAP_CNT ];
   jsonp_open_envelope( gui->http, "summary", "live_tile_metrics" );
     jsonp_open_object( gui->http, "value" );
       fd_gui_printf_tile_metrics( gui, prev, cur );

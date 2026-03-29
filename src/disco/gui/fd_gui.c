@@ -359,7 +359,9 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
   cur->in.mcast_bytes  = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_MCAST_RCV_BYTES   ) );
   cur->in.mcast_new       = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_MCAST_NEW_CNT      ) );
   cur->in.turbine_dup     = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_TURBINE_DUP_CNT    ) );
-  cur->in.txproc_fec_sets = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_FEC_SETS_COMPLETED  ) );
+  for( ulong i=0UL; i<6UL; i++ )
+    cur->in.shred_processed[ i ] = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_PROCESSED_BAD_SLOT ) + i );
+  cur->in.txproc_fec_sets = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_FEC_SETS_COMPLETED ) );
 
   cur->out.turbine_unicast = 0UL;
   cur->out.repair          = 0UL;
@@ -380,12 +382,14 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
 
   cur->out.turbine_mcast = 0UL;
   cur->out.mcast_relay   = 0UL;
+  cur->in.dedup_skipped  = 0UL;
   ulong smcast_eg_idx = fd_topo_find_tile( topo, "smcast", 0UL );
   if( FD_LIKELY( smcast_eg_idx!=ULONG_MAX ) ) {
     fd_topo_tile_t const * smcast_eg = &topo->tiles[ smcast_eg_idx ];
     volatile ulong const * sm_eg_met = fd_metrics_tile( smcast_eg->metrics );
     cur->out.turbine_mcast = sm_eg_met[ FD_METRICS_COUNTER_SHRED_MCAST_TX_MCAST_BYTES_OFF  ];
     cur->out.mcast_relay   = sm_eg_met[ FD_METRICS_COUNTER_SHRED_MCAST_TX_RELAY_BYTES_OFF  ];
+    cur->in.dedup_skipped  = sm_eg_met[ FD_METRICS_COUNTER_SHRED_MCAST_DEDUP_SKIPPED_OFF   ];
   }
 
   cur->in.repair = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_REPAIR_RCV_BYTES ) );

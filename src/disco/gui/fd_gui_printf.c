@@ -678,7 +678,14 @@ fd_gui_printf_network_metrics( fd_gui_t *                     gui,
     jsonp_ulong( gui->http, NULL, cur->in.mcast_shreds    );  /* idx 7: mcast shreds/s */
     jsonp_ulong( gui->http, NULL, cur->in.mcast_new       );  /* idx 8: mcast shreds that arrived first */
     jsonp_ulong( gui->http, NULL, cur->in.turbine_dup     );  /* idx 9: turbine duplicates */
-    jsonp_ulong( gui->http, NULL, cur->in.txproc_fec_sets );  /* idx 10: FEC sets forwarded to txproc */
+    jsonp_ulong( gui->http, NULL, cur->in.dedup_skipped    );  /* idx 10: shreds dropped by smcast as duplicates */
+    jsonp_ulong( gui->http, NULL, cur->in.shred_processed[0] ); /* idx 11: bad_slot */
+    jsonp_ulong( gui->http, NULL, cur->in.shred_processed[1] ); /* idx 12: parse_failed */
+    jsonp_ulong( gui->http, NULL, cur->in.shred_processed[2] ); /* idx 13: rejected */
+    jsonp_ulong( gui->http, NULL, cur->in.shred_processed[3] ); /* idx 14: ignored */
+    jsonp_ulong( gui->http, NULL, cur->in.shred_processed[4] ); /* idx 15: okay */
+    jsonp_ulong( gui->http, NULL, cur->in.shred_processed[5] ); /* idx 16: completes */
+    jsonp_ulong( gui->http, NULL, cur->in.txproc_fec_sets    ); /* idx 17: FEC sets forwarded to txproc */
   jsonp_close_array( gui->http );
   jsonp_open_array( gui->http, "egress" );
     jsonp_ulong( gui->http, NULL, cur->out.turbine_unicast ); /* idx 0: turbine.unicast */

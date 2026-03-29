@@ -1156,7 +1156,25 @@ after_frag( fd_shred_ctx_t *    ctx,
        In Frankendancer (ctx->store==NULL), assemble the payload directly
        from the completed FEC set's data shreds. */
     if( FD_UNLIKELY( !ctx->store && ctx->txproc_out_idx!=ULONG_MAX ) ) {
-
+      uchar * dst     = fd_chunk_to_laddr( ctx->txproc_out_mem, ctx->txproc_out_chunk );
+      ulong   data_sz = 0UL;
+      for( ulong i=0UL; i<set->data_shred_cnt; i++ ) {
+        fd_shred_t * data_shred = (fd_shred_t *)fd_type_pun( set->data_shreds[i] );
+        ulong        payload_sz = fd_shred_payload_sz( data_shred );
+        if( FD_UNLIKELY( data_sz + payload_sz > FD_STORE_DATA_MAX ) ) {
+          FD_LOG_WARNING(( "Shred tile %lu: completed FEC set %lu %u data_sz: %lu exceeds FD_STORE_DATA_MAX: %lu. Truncating.", ctx->round_robin_id, data_shred->slot, data_shred->fec_set_idx, data_sz + payload_sz, FD_STORE_DATA_MAX ));
+          break;
+        }
+        fd_memcpy( dst + data_sz, fd_shred_data_payload( data_shred ), payload_sz );
+        data_sz += payload_sz;
+      }
+      if( FD_LIKELY( data_sz>0UL ) ) {
+        ulong txp_sig = (last->slot << 32UL) | (ulong)last->fec_set_idx;
+        ulong tspub   = fd_frag_meta_ts_comp( fd_tickcount() );
+        fd_stem_publish( stem, ctx->txproc_out_idx, txp_sig, ctx->txproc_out_chunk, data_sz, 0UL, ctx->tsorig, tspub );
+        ctx->txproc_out_chunk = fd_dcache_compact_next( ctx->txproc_out_chunk, data_sz, ctx->txproc_out_chunk0, ctx->txproc_out_wmark );
+        ctx->metrics->fec_sets_completed++;
+      }
     }
 
     if( FD_LIKELY( ctx->shred_out_idx!=ULONG_MAX ) ) { /* firedancer-only */

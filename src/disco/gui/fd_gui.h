@@ -280,6 +280,8 @@ struct fd_gui_network_stats {
     ulong metric;
     ulong shreds;           /* count of turbine shreds received */
     ulong mcast_shreds;     /* count of shreds received on multicast port */
+    ulong dedup_skipped;    /* shreds dropped by smcast tile as duplicates (seen from other source) */
+    ulong shred_processed[6]; /* FEC resolver result: [0]=bad_slot [1]=parse_failed [2]=rejected [3]=ignored [4]=okay [5]=completes */
     ulong txproc_fec_sets;  /* FEC sets forwarded to txproc tile */
   } in;
   struct {

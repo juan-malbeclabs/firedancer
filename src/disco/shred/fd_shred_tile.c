@@ -928,7 +928,15 @@ after_frag( fd_shred_ctx_t *    ctx,
     if( FD_UNLIKELY( !shred       ) ) { ctx->metrics->shred_processing_result[ 1 ]++; return; }
 
     fd_epoch_leaders_t const * lsched = fd_stake_ci_get_lsched_for_slot( ctx->stake_ci, shred->slot );
-    if( FD_UNLIKELY( !lsched      ) ) { ctx->metrics->shred_processing_result[ 0 ]++; return; }
+    if( FD_UNLIKELY( !lsched      ) ) {
+      ctx->metrics->shred_processing_result[ 0 ]++;
+      /* No epoch data (e.g. relay mode) — still forward raw shred to additional destinations */
+      if( FD_LIKELY( fd_disco_netmux_sig_proto( sig ) != DST_PROTO_REPAIR ) &&
+          FD_LIKELY( !ctx->in_is_mcast[ in_idx ] ) ) {
+        for( ulong i=0UL; i<ctx->adtl_dests_retransmit_cnt; i++ ) send_shred( ctx, stem, shred, ctx->adtl_dests_retransmit+i, ctx->tsorig );
+      }
+      return;
+    }
 
     fd_pubkey_t const * slot_leader = fd_epoch_leaders_get( lsched, shred->slot );
     if( FD_UNLIKELY( !slot_leader ) ) { ctx->metrics->shred_processing_result[ 0 ]++; return; } /* Count this as bad slot too */

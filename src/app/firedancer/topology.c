@@ -832,16 +832,16 @@ fd_topo_initialize( config_t * config ) {
     fd_topob_tile_in( topo, "replay", 0UL, "metric_in", "rpc_replay", 0UL, FD_TOPOB_RELIABLE, FD_TOPOB_POLLED );
   }
 
-  if( FD_UNLIKELY( config->tiles.dexfilter.enabled ) ) {
-    fd_topob_wksp( topo, "shred_dexfilter" );
-    fd_topob_wksp( topo, "dexfilter" );
+  if( FD_UNLIKELY( config->tiles.dexf.enabled ) ) {
+    fd_topob_wksp( topo, "shred_dexf" );
+    fd_topob_wksp( topo, "dexf" );
 
-    FOR(shred_tile_cnt) fd_topob_link( topo, "shred_dexfilter", "shred_dexfilter", 1024UL, 65536UL, 1UL );
+    FOR(shred_tile_cnt) fd_topob_link( topo, "shred_dexf", "shred_dexf", 1024UL, 65536UL, 1UL );
 
-    fd_topob_tile( topo, "dexfilter", "dexfilter", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 );
+    fd_topob_tile( topo, "dexf", "dexf", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 );
 
-    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred", i, "shred_dexfilter", i );
-    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "dexfilter", 0UL, "metric_in", "shred_dexfilter", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred", i, "shred_dexf", i );
+    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "dexf", 0UL, "metric_in", "shred_dexf", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
   }
 
   if( FD_UNLIKELY( config->tiles.shred_mcast.enabled ) ) {
@@ -1462,10 +1462,10 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     tile->bundle.ssl_heap_sz = config->development.bundle.ssl_heap_size_mib<<20;
     tile->bundle.keepalive_interval_nanos = config->tiles.bundle.keepalive_interval_millis * (ulong)1e6;
     tile->bundle.tls_cert_verify = !!config->tiles.bundle.tls_cert_verify;
-  } else if( FD_UNLIKELY( !strcmp( tile->name, "dexfilter" ) ) ) {
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "dexf" ) ) ) {
 
-    fd_cstr_ncpy( tile->dexfilter.log_path,      config->tiles.dexfilter.log_path,      sizeof(tile->dexfilter.log_path)      );
-    fd_cstr_ncpy( tile->dexfilter.swap_log_path, config->tiles.dexfilter.swap_log_path, sizeof(tile->dexfilter.swap_log_path) );
+    fd_cstr_ncpy( tile->dexf.log_path,      config->tiles.dexf.log_path,      sizeof(tile->dexf.log_path)      );
+    fd_cstr_ncpy( tile->dexf.swap_log_path, config->tiles.dexf.swap_log_path, sizeof(tile->dexf.swap_log_path) );
 
   } else if( FD_UNLIKELY( !strcmp( tile->name, "smcast" ) ) ) {
 

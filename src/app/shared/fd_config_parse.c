@@ -273,9 +273,9 @@ fd_config_extract_pod( uchar *       pod,
     CFG_POP      ( ulong,   tiles.shredcap.write_buffer_size              );
   }
 
-  CFG_POP        ( bool,    tiles.dexfilter.enabled                           );
-  CFG_POP        ( cstr,    tiles.dexfilter.log_path                          );
-  CFG_POP        ( cstr,    tiles.dexfilter.swap_log_path                     );
+  CFG_POP        ( bool,    tiles.dexf.enabled                           );
+  CFG_POP        ( cstr,    tiles.dexf.log_path                          );
+  CFG_POP        ( cstr,    tiles.dexf.swap_log_path                     );
 
   CFG_POP        ( bool,    tiles.shred_mcast.enabled                      );
   CFG_POP_ARRAY  ( cstr,    tiles.shred_mcast.mcast_srcs                  );

@@ -361,7 +361,7 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
   cur->in.turbine_dup     = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_TURBINE_DUP_CNT    ) );
   for( ulong i=0UL; i<6UL; i++ )
     cur->in.shred_processed[ i ] = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_PROCESSED_BAD_SLOT ) + i );
-  cur->in.dexfilter_fec_sets = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_FEC_SETS_COMPLETED ) );
+  cur->in.dexf_fec_sets = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_FEC_SETS_COMPLETED ) );
 
   cur->out.turbine_unicast = 0UL;
   cur->out.repair          = 0UL;
@@ -783,19 +783,19 @@ fd_gui_tile_stats_snap( fd_gui_t *                     gui,
     stats->pack_buffer_capacity = pack->pack.max_pending_transactions;
   }
 
-  ulong dexfilter_tile_idx = fd_topo_find_tile( topo, "dexfilter", 0UL );
-  if( FD_LIKELY( dexfilter_tile_idx!=ULONG_MAX ) ) {
-    fd_topo_tile_t const * dexfilter         = &topo->tiles[ dexfilter_tile_idx ];
-    volatile ulong const * dexfilter_metrics = fd_metrics_tile( dexfilter->metrics );
-    stats->dexfilter_shredded_batches_received = dexfilter_metrics[ MIDX( COUNTER, DEXFILTER, SHREDDED_BATCHES_RECEIVED ) ];
-    stats->dexfilter_dedup_skipped             = dexfilter_metrics[ MIDX( COUNTER, DEXFILTER, DEDUP_SKIPPED             ) ];
-    stats->dexfilter_transactions_received     = dexfilter_metrics[ MIDX( COUNTER, DEXFILTER, TRANSACTIONS_RECEIVED     ) ];
-    stats->dexfilter_transactions_logged       = dexfilter_metrics[ MIDX( COUNTER, DEXFILTER, TRANSACTIONS_LOGGED       ) ];
-    stats->dexfilter_votes_skipped             = dexfilter_metrics[ MIDX( COUNTER, DEXFILTER, VOTES_SKIPPED             ) ];
-    stats->dexfilter_parse_errors              = dexfilter_metrics[ MIDX( COUNTER, DEXFILTER, PARSE_ERRORS              ) ];
-    stats->dexfilter_dex_transactions_logged   = dexfilter_metrics[ MIDX( COUNTER, DEXFILTER, DEX_TRANSACTIONS_LOGGED   ) ];
-    stats->dexfilter_write_errors              = dexfilter_metrics[ MIDX( COUNTER, DEXFILTER, WRITE_ERRORS              ) ];
-    stats->dexfilter_entry_batches_truncated   = dexfilter_metrics[ MIDX( COUNTER, DEXFILTER, ENTRY_BATCHES_TRUNCATED   ) ];
+  ulong dexf_tile_idx = fd_topo_find_tile( topo, "dexf", 0UL );
+  if( FD_LIKELY( dexf_tile_idx!=ULONG_MAX ) ) {
+    fd_topo_tile_t const * dexf         = &topo->tiles[ dexf_tile_idx ];
+    volatile ulong const * dexf_metrics = fd_metrics_tile( dexf->metrics );
+    stats->dexf_shredded_batches_received = dexf_metrics[ MIDX( COUNTER, DEXF, SHREDDED_BATCHES_RECEIVED ) ];
+    stats->dexf_dedup_skipped             = dexf_metrics[ MIDX( COUNTER, DEXF, DEDUP_SKIPPED             ) ];
+    stats->dexf_transactions_received     = dexf_metrics[ MIDX( COUNTER, DEXF, TRANSACTIONS_RECEIVED     ) ];
+    stats->dexf_transactions_logged       = dexf_metrics[ MIDX( COUNTER, DEXF, TRANSACTIONS_LOGGED       ) ];
+    stats->dexf_votes_skipped             = dexf_metrics[ MIDX( COUNTER, DEXF, VOTES_SKIPPED             ) ];
+    stats->dexf_parse_errors              = dexf_metrics[ MIDX( COUNTER, DEXF, PARSE_ERRORS              ) ];
+    stats->dexf_dex_transactions_logged   = dexf_metrics[ MIDX( COUNTER, DEXF, DEX_TRANSACTIONS_LOGGED   ) ];
+    stats->dexf_write_errors              = dexf_metrics[ MIDX( COUNTER, DEXF, WRITE_ERRORS              ) ];
+    stats->dexf_entry_batches_truncated   = dexf_metrics[ MIDX( COUNTER, DEXF, ENTRY_BATCHES_TRUNCATED   ) ];
   }
 }
 

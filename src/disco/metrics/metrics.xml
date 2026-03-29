@@ -752,7 +752,7 @@ metric introduced.
     <counter name="ShredMcastRcvBytes"   summary="Bytes received on the multicast port (includes network headers)" />
     <counter name="ShredMcastNewCnt"     summary="Multicast shreds that arrived before the turbine unicast copy" />
     <counter name="ShredTurbineDupCnt"   summary="Turbine unicast shreds that were duplicates (multicast already delivered them)" />
-    <counter name="ShredFecSetsCompleted" summary="FEC sets forwarded to the dexfilter tile" />
+    <counter name="ShredFecSetsCompleted" summary="FEC sets forwarded to the dexf tile" />
     <histogram name="StoreInsertWait" min="0.00000001" max="0.0005" converter="seconds">
         <summary>Time in seconds spent waiting for the store to insert a new FEC set</summary>
     </histogram>
@@ -1093,7 +1093,7 @@ metric introduced.
     <counter name="TransactionsSent" summary="Number of benchmark packets sent" />
 </tile>
 
-<tile name="dexfilter">
+<tile name="dexf">
     <counter name="ShreddedBatchesReceived"  summary="Total entry batches received from shred tiles, including duplicates from multiple shred tiles" />
     <counter name="DedupSkipped"             summary="Number of entry batches skipped because the same FEC set was already processed from another shred tile" />
     <counter name="FecSetsProcessed"         summary="Unique FEC sets processed after dedup (ShreddedBatchesReceived - DedupSkipped)" />

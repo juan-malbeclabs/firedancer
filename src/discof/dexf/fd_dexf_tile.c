@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "generated/fd_dexfilter_tile_seccomp.h"
+#include "generated/fd_dexf_tile_seccomp.h"
 
 /* Maximum size of an entry batch (from FD_STORE_DATA_MAX = 63985 rounded up) */
 #define FD_TXLOG_ENTRY_BATCH_MAX  (65536UL)
@@ -97,11 +97,11 @@ populate_allowed_seccomp( fd_topo_t const *      topo  FD_PARAM_UNUSED,
                           fd_topo_tile_t const * tile,
                           ulong                  out_cnt,
                           struct sock_filter *   out ) {
-  populate_sock_filter_policy_fd_dexfilter_tile( out_cnt, out,
+  populate_sock_filter_policy_fd_dexf_tile( out_cnt, out,
                                              (uint)fd_log_private_logfile_fd(),
-                                             (uint)tile->dexfilter.logfile_fd,
-                                             (uint)tile->dexfilter.swaplog_fd );
-  return sock_filter_policy_fd_dexfilter_tile_instr_cnt;
+                                             (uint)tile->dexf.logfile_fd,
+                                             (uint)tile->dexf.swaplog_fd );
+  return sock_filter_policy_fd_dexf_tile_instr_cnt;
 }
 
 static ulong
@@ -113,30 +113,30 @@ populate_allowed_fds( fd_topo_t const *      topo       FD_PARAM_UNUSED,
   out_fds[ out_cnt++ ] = 2; /* stderr */
   if( FD_LIKELY( -1!=fd_log_private_logfile_fd() ) )
     out_fds[ out_cnt++ ] = fd_log_private_logfile_fd();
-  if( FD_LIKELY( -1!=tile->dexfilter.logfile_fd ) )
-    out_fds[ out_cnt++ ] = tile->dexfilter.logfile_fd;
-  if( FD_LIKELY( -1!=tile->dexfilter.swaplog_fd ) )
-    out_fds[ out_cnt++ ] = tile->dexfilter.swaplog_fd;
+  if( FD_LIKELY( -1!=tile->dexf.logfile_fd ) )
+    out_fds[ out_cnt++ ] = tile->dexf.logfile_fd;
+  if( FD_LIKELY( -1!=tile->dexf.swaplog_fd ) )
+    out_fds[ out_cnt++ ] = tile->dexf.swaplog_fd;
   return out_cnt;
 }
 
 static void
 privileged_init( fd_topo_t *      topo  FD_PARAM_UNUSED,
                  fd_topo_tile_t * tile ) {
-  FD_LOG_NOTICE(( "txlog: opening log file `%s`", tile->dexfilter.log_path ));
-  tile->dexfilter.logfile_fd = open( tile->dexfilter.log_path, O_WRONLY|O_CREAT|O_APPEND, 0644 );
-  if( FD_UNLIKELY( tile->dexfilter.logfile_fd<0 ) )
-    FD_LOG_ERR(( "open(%s) failed (%d-%s)", tile->dexfilter.log_path, errno, fd_io_strerror( errno ) ));
-  FD_LOG_NOTICE(( "txlog: log file opened (fd=%d)", tile->dexfilter.logfile_fd ));
+  FD_LOG_NOTICE(( "txlog: opening log file `%s`", tile->dexf.log_path ));
+  tile->dexf.logfile_fd = open( tile->dexf.log_path, O_WRONLY|O_CREAT|O_APPEND, 0644 );
+  if( FD_UNLIKELY( tile->dexf.logfile_fd<0 ) )
+    FD_LOG_ERR(( "open(%s) failed (%d-%s)", tile->dexf.log_path, errno, fd_io_strerror( errno ) ));
+  FD_LOG_NOTICE(( "txlog: log file opened (fd=%d)", tile->dexf.logfile_fd ));
 
-  if( FD_LIKELY( tile->dexfilter.swap_log_path[0] ) ) {
-    FD_LOG_NOTICE(( "txlog: opening swap log file `%s`", tile->dexfilter.swap_log_path ));
-    tile->dexfilter.swaplog_fd = open( tile->dexfilter.swap_log_path, O_WRONLY|O_CREAT|O_APPEND, 0644 );
-    if( FD_UNLIKELY( tile->dexfilter.swaplog_fd<0 ) )
-      FD_LOG_ERR(( "open(%s) failed (%d-%s)", tile->dexfilter.swap_log_path, errno, fd_io_strerror( errno ) ));
-    FD_LOG_NOTICE(( "txlog: swap log file opened (fd=%d)", tile->dexfilter.swaplog_fd ));
+  if( FD_LIKELY( tile->dexf.swap_log_path[0] ) ) {
+    FD_LOG_NOTICE(( "txlog: opening swap log file `%s`", tile->dexf.swap_log_path ));
+    tile->dexf.swaplog_fd = open( tile->dexf.swap_log_path, O_WRONLY|O_CREAT|O_APPEND, 0644 );
+    if( FD_UNLIKELY( tile->dexf.swaplog_fd<0 ) )
+      FD_LOG_ERR(( "open(%s) failed (%d-%s)", tile->dexf.swap_log_path, errno, fd_io_strerror( errno ) ));
+    FD_LOG_NOTICE(( "txlog: swap log file opened (fd=%d)", tile->dexf.swaplog_fd ));
   } else {
-    tile->dexfilter.swaplog_fd = -1;
+    tile->dexf.swaplog_fd = -1;
   }
 }
 
@@ -156,8 +156,8 @@ unprivileged_init( fd_topo_t *      topo,
     ctx->in[ i ].wmark  = fd_dcache_compact_wmark ( ctx->in[ i ].mem, link->dcache, link->mtu );
   }
 
-  ctx->logfile_fd     = tile->dexfilter.logfile_fd;
-  ctx->swaplog_fd     = tile->dexfilter.swaplog_fd;
+  ctx->logfile_fd     = tile->dexf.logfile_fd;
+  ctx->swaplog_fd     = tile->dexf.swaplog_fd;
   ctx->entry_batch_sz = 0UL;
   ctx->slot           = 0UL;
   ctx->fec_set_idx    = 0U;
@@ -392,16 +392,16 @@ after_frag( fd_txlog_ctx_t *    ctx,
 
 static inline void
 metrics_write( fd_txlog_ctx_t * ctx ) {
-  FD_MCNT_SET( DEXFILTER, SHREDDED_BATCHES_RECEIVED,  ctx->metrics.shredded_batches_received  );
-  FD_MCNT_SET( DEXFILTER, DEDUP_SKIPPED,               ctx->metrics.dedup_skipped               );
-  FD_MCNT_SET( DEXFILTER, FEC_SETS_PROCESSED,           ctx->metrics.fec_sets_processed           );
-  FD_MCNT_SET( DEXFILTER, TRANSACTIONS_RECEIVED,       ctx->metrics.transactions_received       );
-  FD_MCNT_SET( DEXFILTER, TRANSACTIONS_LOGGED,         ctx->metrics.transactions_logged         );
-  FD_MCNT_SET( DEXFILTER, VOTES_SKIPPED,               ctx->metrics.votes_skipped               );
-  FD_MCNT_SET( DEXFILTER, PARSE_ERRORS,                ctx->metrics.parse_errors                );
-  FD_MCNT_SET( DEXFILTER, DEX_TRANSACTIONS_LOGGED,     ctx->metrics.dex_transactions_logged     );
-  FD_MCNT_SET( DEXFILTER, WRITE_ERRORS,                ctx->metrics.write_errors                );
-  FD_MCNT_SET( DEXFILTER, ENTRY_BATCHES_TRUNCATED,     ctx->metrics.entry_batches_truncated     );
+  FD_MCNT_SET( DEXF, SHREDDED_BATCHES_RECEIVED,  ctx->metrics.shredded_batches_received  );
+  FD_MCNT_SET( DEXF, DEDUP_SKIPPED,               ctx->metrics.dedup_skipped               );
+  FD_MCNT_SET( DEXF, FEC_SETS_PROCESSED,           ctx->metrics.fec_sets_processed           );
+  FD_MCNT_SET( DEXF, TRANSACTIONS_RECEIVED,       ctx->metrics.transactions_received       );
+  FD_MCNT_SET( DEXF, TRANSACTIONS_LOGGED,         ctx->metrics.transactions_logged         );
+  FD_MCNT_SET( DEXF, VOTES_SKIPPED,               ctx->metrics.votes_skipped               );
+  FD_MCNT_SET( DEXF, PARSE_ERRORS,                ctx->metrics.parse_errors                );
+  FD_MCNT_SET( DEXF, DEX_TRANSACTIONS_LOGGED,     ctx->metrics.dex_transactions_logged     );
+  FD_MCNT_SET( DEXF, WRITE_ERRORS,                ctx->metrics.write_errors                );
+  FD_MCNT_SET( DEXF, ENTRY_BATCHES_TRUNCATED,     ctx->metrics.entry_batches_truncated     );
 }
 
 #define STEM_BURST (1UL)
@@ -419,8 +419,8 @@ metrics_write( fd_txlog_ctx_t * ctx ) {
 
 #include "../../disco/stem/fd_stem.c"
 
-fd_topo_run_tile_t fd_tile_dexfilter = {
-  .name                     = "dexfilter",
+fd_topo_run_tile_t fd_tile_dexf = {
+  .name                     = "dexf",
   .populate_allowed_seccomp = populate_allowed_seccomp,
   .populate_allowed_fds     = populate_allowed_fds,
   .scratch_align            = scratch_align,

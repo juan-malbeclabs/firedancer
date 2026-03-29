@@ -527,7 +527,7 @@ struct fd_topo_tile {
       /* Set internally during privileged_init */
       int logfile_fd;
       int swaplog_fd;
-    } dexfilter;
+    } dexf;
 
     struct {
       ulong  mcast_src_cnt;

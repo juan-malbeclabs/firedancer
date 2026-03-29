@@ -686,6 +686,7 @@ fd_gui_printf_network_metrics( fd_gui_t *                     gui,
     jsonp_ulong( gui->http, NULL, cur->out.tpu             ); /* idx 3: tpu */
     jsonp_ulong( gui->http, NULL, cur->out.repair          ); /* idx 4: repair */
     jsonp_ulong( gui->http, NULL, cur->out.metric          ); /* idx 5: metrics */
+    jsonp_ulong( gui->http, NULL, cur->out.mcast_relay     ); /* idx 6: mcast relay */
   jsonp_close_array( gui->http );
   jsonp_open_array( gui->http, "mcast_srcs" );
     for( ulong i=0UL; i<cur->mcast_src_cnt; i++ ) {

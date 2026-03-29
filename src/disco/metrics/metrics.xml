@@ -1110,7 +1110,8 @@ metric introduced.
     <counter name="RxTurbineShreds"    summary="Number of shreds received from the turbine (shred tile) input link" />
     <counter name="RxMcastShreds"      summary="Number of shreds received from the external IP multicast source socket" />
     <counter name="TxMcastShreds"      summary="Number of shreds forwarded to the multicast destination address" />
-    <counter name="TxMcastBytes"       summary="Number of bytes forwarded to the multicast destination address" />
+    <counter name="TxMcastBytes"       summary="Bytes forwarded to multicast destinations from the turbine (shred tile) input path" />
+    <counter name="TxRelayBytes"       summary="Bytes forwarded to multicast destinations from the external multicast relay path (mcast-in to mcast-out)" />
     <counter name="DedupSkipped"       summary="Number of shreds dropped because they were already seen from the other source" />
     <counter name="ParseFailed"        summary="Number of shreds dropped because fd_shred_parse() returned NULL" />
     <counter name="RxMcastSrc0Shreds"  summary="Number of shreds received from multicast source 0" />

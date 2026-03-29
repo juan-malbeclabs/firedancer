@@ -283,7 +283,8 @@ struct fd_gui_network_stats {
   } in;
   struct {
     ulong turbine_unicast; /* shred_net bytes forwarded by net tiles (unicast) */
-    ulong turbine_mcast;   /* bytes forwarded by smcast tile to multicast groups */
+    ulong turbine_mcast;   /* bytes forwarded by smcast tile to mcast groups from turbine path */
+    ulong mcast_relay;     /* bytes forwarded by smcast tile to mcast groups from mcast-in relay path */
     ulong gossip;
     ulong tpu;
     ulong repair;

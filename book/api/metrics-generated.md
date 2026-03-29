@@ -1157,7 +1157,8 @@
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;turbine_&#8203;shreds</span> | counter | Number of shreds received from the turbine (shred tile) input link |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;shreds</span> | counter | Number of shreds received from the external IP multicast source socket |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;tx_&#8203;mcast_&#8203;shreds</span> | counter | Number of shreds forwarded to the multicast destination address |
-| <span class="metrics-name">shred_&#8203;mcast_&#8203;tx_&#8203;mcast_&#8203;bytes</span> | counter | Number of bytes forwarded to the multicast destination address |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;tx_&#8203;mcast_&#8203;bytes</span> | counter | Bytes forwarded to multicast destinations from the turbine (shred tile) input path |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;tx_&#8203;relay_&#8203;bytes</span> | counter | Bytes forwarded to multicast destinations from the external multicast relay path (mcast-in to mcast-out) |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;dedup_&#8203;skipped</span> | counter | Number of shreds dropped because they were already seen from the other source |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;parse_&#8203;failed</span> | counter | Number of shreds dropped because fd_shred_parse() returned NULL |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src0_&#8203;shreds</span> | counter | Number of shreds received from multicast source 0 |

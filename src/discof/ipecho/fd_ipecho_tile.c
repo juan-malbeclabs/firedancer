@@ -90,7 +90,7 @@ after_credit( fd_ipecho_tile_ctx_t * ctx,
               int *                  charge_busy ) {
   (void)opt_poll_in;
 
-  int timeout = ctx->retrieving ? 0 : 10;
+  int timeout = ctx->retrieving ? 0 : 1;
 
   if( FD_UNLIKELY( ctx->retrieving ) ) poll_client( ctx, stem, charge_busy );
   else                                 fd_ipecho_server_poll( ctx->server, charge_busy, timeout );

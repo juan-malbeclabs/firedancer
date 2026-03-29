@@ -86,6 +86,7 @@ struct fd_snapin_tile {
   fd_snapin_out_link_t ct_out;
   fd_snapin_out_link_t manifest_out;
   fd_snapin_out_link_t gui_out;
+  fd_snapin_out_link_t stake_out; /* optional: publishes epoch stake weights for relay mode */
 
   struct {
     uchar * bstream_mem;

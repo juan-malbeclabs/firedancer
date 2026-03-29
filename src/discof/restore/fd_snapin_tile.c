@@ -9,6 +9,10 @@
 #include "../../flamenco/runtime/fd_system_ids.h"
 #include "../../flamenco/runtime/sysvar/fd_sysvar_slot_history.h"
 #include "../../flamenco/types/fd_types.h"
+#include "../../flamenco/types/fd_types_custom.h"
+#include "../../flamenco/leaders/fd_leaders_base.h"
+#include "../../flamenco/runtime/sysvar/fd_sysvar_epoch_schedule.h"
+#include "../replay/fd_exec.h"
 
 #include "generated/fd_snapin_tile_seccomp.h"
 
@@ -379,6 +383,36 @@ populate_txncache( fd_snapin_tile_t *                     ctx,
   return 0;
 }
 
+static inline ulong
+generate_stake_weight_msg_from_manifest( ulong                                       epoch,
+                                         fd_epoch_schedule_t const *                 epoch_schedule,
+                                         fd_snapshot_manifest_epoch_stakes_t const * epoch_stakes,
+                                         ulong *                                     stake_weight_msg_out ) {
+  fd_stake_weight_msg_t *  msg     = (fd_stake_weight_msg_t *)fd_type_pun( stake_weight_msg_out );
+  fd_vote_stake_weight_t * weights = msg->weights;
+
+  msg->epoch             = epoch;
+  msg->staked_cnt        = epoch_stakes->vote_stakes_len;
+  msg->start_slot        = fd_epoch_slot0( epoch_schedule, epoch );
+  msg->slot_cnt          = epoch_schedule->slots_per_epoch;
+  msg->excluded_stake    = 0UL;
+  msg->vote_keyed_lsched = 1UL;
+
+  if(    ( 1==epoch_schedule->warmup && epoch<FD_SIMD0180_ACTIVE_EPOCH_TESTNET )
+      || ( 0==epoch_schedule->warmup && epoch<FD_SIMD0180_ACTIVE_EPOCH_MAINNET ) ) {
+    msg->vote_keyed_lsched = 0UL;
+  }
+
+  for( ulong i=0UL; i<epoch_stakes->vote_stakes_len; i++ ) {
+    weights[ i ].stake = epoch_stakes->vote_stakes[ i ].stake;
+    memcpy( weights[ i ].id_key.uc,   epoch_stakes->vote_stakes[ i ].identity, sizeof(fd_pubkey_t) );
+    memcpy( weights[ i ].vote_key.uc, epoch_stakes->vote_stakes[ i ].vote,     sizeof(fd_pubkey_t) );
+  }
+  sort_vote_weights_by_stake_vote_inplace( weights, epoch_stakes->vote_stakes_len );
+
+  return fd_stake_weight_msg_sz( epoch_stakes->vote_stakes_len );
+}
+
 static void
 process_manifest( fd_snapin_tile_t * ctx ) {
   fd_snapshot_manifest_t * manifest = fd_chunk_to_laddr( ctx->manifest_out.mem, ctx->manifest_out.chunk );
@@ -390,10 +424,12 @@ process_manifest( fd_snapin_tile_t * ctx ) {
     return;
   }
 
-  if( FD_UNLIKELY( populate_txncache( ctx, manifest->blockhashes, manifest->blockhashes_len ) ) ) {
-    FD_LOG_WARNING(( "populating txncache failed" ));
-    transition_malformed( ctx, ctx->stem );
-    return;
+  if( FD_LIKELY( ctx->txncache ) ) {
+    if( FD_UNLIKELY( populate_txncache( ctx, manifest->blockhashes, manifest->blockhashes_len ) ) ) {
+      FD_LOG_WARNING(( "populating txncache failed" ));
+      transition_malformed( ctx, ctx->stem );
+      return;
+    }
   }
 
   if( manifest->has_accounts_lthash ) {
@@ -405,12 +441,33 @@ process_manifest( fd_snapin_tile_t * ctx ) {
                   manifest->slot, sum_enc, hash32_enc ));
   }
 
-  manifest->txncache_fork_id = ctx->txncache_root_fork_id.val;
+  manifest->txncache_fork_id = ctx->txncache ? ctx->txncache_root_fork_id.val : USHORT_MAX;
 
   ulong sig = ctx->full ? fd_ssmsg_sig( FD_SSMSG_MANIFEST_FULL ) :
                           fd_ssmsg_sig( FD_SSMSG_MANIFEST_INCREMENTAL );
   fd_stem_publish( ctx->stem, ctx->manifest_out.idx, sig, ctx->manifest_out.chunk, sizeof(fd_snapshot_manifest_t), 0UL, 0UL, 0UL );
   ctx->manifest_out.chunk = fd_dcache_compact_next( ctx->manifest_out.chunk, sizeof(fd_snapshot_manifest_t), ctx->manifest_out.chunk0, ctx->manifest_out.wmark );
+
+  /* In relay mode, publish epoch stake weights so the shred tile can
+     verify leader signatures on received turbine shreds. */
+  if( FD_UNLIKELY( ctx->stake_out.idx!=ULONG_MAX ) ) {
+    fd_epoch_schedule_t const * schedule = fd_type_pun_const( &manifest->epoch_schedule_params );
+    ulong epoch = fd_slot_to_epoch( schedule, manifest->slot, NULL );
+
+    /* current epoch */
+    ulong * msg = fd_chunk_to_laddr( ctx->stake_out.mem, ctx->stake_out.chunk );
+    ulong   sz  = generate_stake_weight_msg_from_manifest( epoch, schedule, &manifest->epoch_stakes[0], msg );
+    fd_stem_publish( ctx->stem, ctx->stake_out.idx, 4UL, ctx->stake_out.chunk, sz, 0UL, 0UL, 0UL );
+    ctx->stake_out.chunk = fd_dcache_compact_next( ctx->stake_out.chunk, sz, ctx->stake_out.chunk0, ctx->stake_out.wmark );
+    FD_LOG_NOTICE(( "snapin: published current epoch stake weights epoch=%lu cnt=%lu", epoch, manifest->epoch_stakes[0].vote_stakes_len ));
+
+    /* next epoch */
+    msg = fd_chunk_to_laddr( ctx->stake_out.mem, ctx->stake_out.chunk );
+    sz  = generate_stake_weight_msg_from_manifest( epoch+1UL, schedule, &manifest->epoch_stakes[1], msg );
+    fd_stem_publish( ctx->stem, ctx->stake_out.idx, 4UL, ctx->stake_out.chunk, sz, 0UL, 0UL, 0UL );
+    ctx->stake_out.chunk = fd_dcache_compact_next( ctx->stake_out.chunk, sz, ctx->stake_out.chunk0, ctx->stake_out.wmark );
+    FD_LOG_NOTICE(( "snapin: published next epoch stake weights epoch=%lu cnt=%lu", epoch+1UL, manifest->epoch_stakes[1].vote_stakes_len ));
+  }
 }
 
 
@@ -544,7 +601,7 @@ handle_control_frag( fd_snapin_tile_t *  ctx,
       ctx->full = sig==FD_SNAPSHOT_MSG_CTRL_INIT_FULL;
       ctx->txncache_entries_len  = 0UL;
       ctx->blockhash_offsets_len = 0UL;
-      fd_txncache_reset( ctx->txncache );
+      if( FD_LIKELY( ctx->txncache ) ) fd_txncache_reset( ctx->txncache );
       fd_ssparse_reset( ctx->ssparse );
       fd_ssmanifest_parser_init( ctx->manifest_parser, fd_chunk_to_laddr( ctx->manifest_out.mem, ctx->manifest_out.chunk ) );
       fd_slot_delta_parser_init( ctx->slot_delta_parser );
@@ -776,11 +833,15 @@ unprivileged_init( fd_topo_t *      topo,
   FD_TEST( fd_accdb_admin_join( ctx->accdb_admin, fd_topo_obj_laddr( topo, tile->snapin.funk_obj_id ) ) );
   fd_funk_txn_xid_copy( ctx->xid, fd_funk_root( ctx->accdb_admin->funk ) );
 
-  void * _txncache_shmem = fd_topo_obj_laddr( topo, tile->snapin.txncache_obj_id );
-  fd_txncache_shmem_t * txncache_shmem = fd_txncache_shmem_join( _txncache_shmem );
-  FD_TEST( txncache_shmem );
-  ctx->txncache = fd_txncache_join( fd_txncache_new( _txncache, txncache_shmem ) );
-  FD_TEST( ctx->txncache );
+  if( FD_LIKELY( tile->snapin.txncache_obj_id!=ULONG_MAX ) ) {
+    void * _txncache_shmem = fd_topo_obj_laddr( topo, tile->snapin.txncache_obj_id );
+    fd_txncache_shmem_t * txncache_shmem = fd_txncache_shmem_join( _txncache_shmem );
+    FD_TEST( txncache_shmem );
+    ctx->txncache = fd_txncache_join( fd_txncache_new( _txncache, txncache_shmem ) );
+    FD_TEST( ctx->txncache );
+  } else {
+    ctx->txncache = NULL; /* relay mode: no txncache needed */
+  }
 
   ctx->txncache_entries_len = 0UL;
   ctx->blockhash_offsets_len = 0UL;
@@ -802,6 +863,7 @@ unprivileged_init( fd_topo_t *      topo,
   ctx->ct_out       = out1( topo, tile, "snapin_ct"    );
   ctx->manifest_out = out1( topo, tile, "snapin_manif" );
   ctx->gui_out      = out1( topo, tile, "snapin_gui"   );
+  ctx->stake_out    = out1( topo, tile, "replay_stake" ); /* optional: relay mode only */
 
   if( FD_UNLIKELY( ctx->ct_out.idx==ULONG_MAX ) )       FD_LOG_ERR(( "tile `" NAME "` missing required out link `snapin_ct`"    ));
   if( FD_UNLIKELY( ctx->manifest_out.idx==ULONG_MAX ) ) FD_LOG_ERR(( "tile `" NAME "` missing required out link `snapin_manif`" ));

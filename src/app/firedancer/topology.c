@@ -273,8 +273,8 @@ fd_topo_initialize( config_t * config ) {
   int vinyl_enabled     = !!config->firedancer.vinyl.enabled;
   int relay             = !strcmp( config->layout.mode, "shred_relay" );
 
-  /* In relay mode, snapshots are not needed (no replay tile). */
-  if( FD_UNLIKELY( relay ) ) snapshots_enabled = 0;
+  /* In relay mode, snapshots are still needed to obtain epoch stake
+     weights for the shred tile to verify turbine leader signatures. */
 
   fd_topo_t * topo = fd_topob_new( &config->topo, config->name );
 
@@ -377,6 +377,7 @@ fd_topo_initialize( config_t * config ) {
     fd_topob_wksp( topo, "snapld"      );
     fd_topob_wksp( topo, "snapdc"      );
     fd_topob_wksp( topo, "snapin"      );
+    if( FD_UNLIKELY( relay ) ) fd_topob_wksp( topo, "replay_stake" );
     if( vinyl_enabled ) {
       fd_topob_wksp( topo, "snapwr" );
     }
@@ -416,8 +417,11 @@ fd_topo_initialize( config_t * config ) {
     /**/               fd_topob_link( topo, "snapdc_in",    "snapdc_in",    16384UL,                                  USHORT_MAX,                    1UL );
     /**/               fd_topob_link( topo, "snapin_ct",    "snapin_ct",    128UL,                                    0UL,                           1UL );
 
-    /**/               fd_topob_link( topo, "snapin_manif", "snapin_manif", 2UL,                                      sizeof(fd_snapshot_manifest_t),1UL );
+    /**/               fd_topob_link( topo, "snapin_manif", "snapin_manif", 2UL,                                      sizeof(fd_snapshot_manifest_t),1UL )->permit_no_consumers = relay ? 1 : 0;
     /**/               fd_topob_link( topo, "snapct_repr",  "snapct_repr",  128UL,                                    0UL,                           1UL )->permit_no_consumers = 1; /* TODO: wire in repair later */
+    if( FD_UNLIKELY( relay ) ) {
+      /**/             fd_topob_link( topo, "replay_stake", "replay_stake", 128UL,                                    FD_STAKE_OUT_MTU,              1UL ); /* snapin → shred: epoch stake weights */
+    }
     if( FD_LIKELY( config->tiles.gui.enabled ) ) {
       /**/             fd_topob_link( topo, "snapct_gui",   "snapct_gui",   128UL,                                    sizeof(fd_snapct_update_t),    1UL );
       /**/             fd_topob_link( topo, "snapin_gui",   "snapin_gui",   4UL,                                      FD_GUI_CONFIG_PARSE_CONFIG_KEYS_MAX_SZ+FD_GUI_CONFIG_PARSE_VALIDATOR_INFO_MAX_SZ, 1UL );
@@ -615,6 +619,11 @@ fd_topo_initialize( config_t * config ) {
     if( FD_LIKELY( config->tiles.gui.enabled ) ) {
       /**/            fd_topob_tile_out(    topo, "snapin", 0UL,                        "snapin_gui",   0UL                                                );
     }
+    if( FD_UNLIKELY( relay ) ) {
+      /* In relay mode, snapin publishes epoch stake weights directly to
+         the shred tile so it can verify leader signatures on turbine shreds. */
+      /**/            fd_topob_tile_out(    topo, "snapin",  0UL,                       "replay_stake", 0UL                                                );
+    }
   }
 
   if( FD_LIKELY( !relay ) ) {
@@ -690,6 +699,8 @@ fd_topo_initialize( config_t * config ) {
   }
 
   if( FD_LIKELY( !relay ) )
+    FOR(shred_tile_cnt) fd_topob_tile_in (   topo, "shred",   i,            "metric_in", "replay_stake", 0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+  if( FD_UNLIKELY( relay && snapshots_enabled ) )
     FOR(shred_tile_cnt) fd_topob_tile_in (   topo, "shred",   i,            "metric_in", "replay_stake", 0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
   FOR(shred_tile_cnt)   fd_topob_tile_in (   topo, "shred",   i,            "metric_in", "gossip_out",   0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
   FOR(shred_tile_cnt)   fd_topob_tile_out(   topo, "shred",   i,                         "shred_out",    i                                                  );

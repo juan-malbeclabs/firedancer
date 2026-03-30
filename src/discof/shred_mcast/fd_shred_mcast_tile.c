@@ -502,7 +502,10 @@ during_frag( fd_shred_mcast_ctx_t * ctx,
   ctx->pkt_sz = sz;
 }
 
-/* after_frag: parse the shred, deduplicate, and forward to multicast TX. */
+/* after_frag: parse the shred, deduplicate, and forward to multicast TX.
+   When turbine wins the race (shred is new), also publish via stem so
+   downstream consumers (shred tile, dexf, …) see a complete winner stream
+   regardless of which source delivered first. */
 static inline void
 after_frag( fd_shred_mcast_ctx_t * ctx,
              ulong                  in_idx  FD_PARAM_UNUSED,
@@ -511,7 +514,7 @@ after_frag( fd_shred_mcast_ctx_t * ctx,
              ulong                  sz      FD_PARAM_UNUSED,
              ulong                  tsorig  FD_PARAM_UNUSED,
              ulong                  tspub   FD_PARAM_UNUSED,
-             fd_stem_context_t *    stem    FD_PARAM_UNUSED ) {
+             fd_stem_context_t *    stem ) {
   if( FD_UNLIKELY( ctx->skip_frag ) ) return;
 
   fd_shred_t const * shred = fd_shred_parse( ctx->pkt_buf, ctx->pkt_sz );
@@ -527,10 +530,28 @@ after_frag( fd_shred_mcast_ctx_t * ctx,
     return;
   }
 
+  /* Turbine won the race — forward to mcast destinations */
   for( ulong d=0UL; d<ctx->mcast_dst_cnt; d++ ) {
     (void)sendto( ctx->mcast_tx_sock, ctx->pkt_buf, ctx->pkt_sz, 0,
                   fd_type_pun_const( &ctx->mcast_dst_addrs[ d ] ),
                   sizeof(ctx->mcast_dst_addrs[ d ]) );
+  }
+
+  /* Also publish via stem so downstream tiles see all race winners uniformly,
+     same as when mcast wins in before_credit. */
+  if( FD_LIKELY( ctx->shred_tile_cnt > 0UL ) ) {
+    ulong shred_sig = fd_ulong_load_8( shred->signature );
+    ulong tile_idx  = shred_sig % ctx->shred_tile_cnt;
+    uchar * dst = fd_chunk_to_laddr( ctx->out[ tile_idx ].mem, ctx->out[ tile_idx ].chunk );
+    fd_memcpy( dst, ctx->pkt_buf, ctx->pkt_sz );
+    ulong out_sig = fd_disco_shred_out_shred_sig( 0, shred->slot, shred->fec_set_idx,
+                                                   is_code, shred->idx );
+    ulong ts = fd_frag_meta_ts_comp( fd_tickcount() );
+    fd_stem_publish( stem, ctx->out[ tile_idx ].out_idx, out_sig,
+                     ctx->out[ tile_idx ].chunk, ctx->pkt_sz, 0UL, ts, ts );
+    ctx->out[ tile_idx ].chunk = fd_dcache_compact_next( ctx->out[ tile_idx ].chunk, ctx->pkt_sz,
+                                                          ctx->out[ tile_idx ].chunk0,
+                                                          ctx->out[ tile_idx ].wmark );
   }
 
   ctx->metrics.rx_turbine++;

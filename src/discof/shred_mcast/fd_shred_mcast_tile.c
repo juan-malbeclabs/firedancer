@@ -98,8 +98,16 @@ typedef struct {
     ulong rx_src_bytes       [ FD_SHRED_MCAST_SRC_MAX ];
     ulong rx_src_dedup       [ FD_SHRED_MCAST_SRC_MAX ];
     ulong rx_src_parse_failed[ FD_SHRED_MCAST_SRC_MAX ];
-    ulong rx_src_sender_ip   [ FD_SHRED_MCAST_SRC_MAX ]; /* last observed sender IPv4 (network byte order) */
+    ulong rx_src_sender_ip   [ FD_SHRED_MCAST_SRC_MAX ]; /* champion sender IPv4 per socket (network byte order) */
   } metrics;
+
+  /* Sticky sender IP tracking: champion = sender IP with the most cumulative
+     packets per mcast socket.  Only displaced when a challenger accumulates
+     more packets than the current champion. */
+  uint  rx_src_champion_ip  [ FD_SHRED_MCAST_SRC_MAX ];
+  ulong rx_src_champion_cnt [ FD_SHRED_MCAST_SRC_MAX ];
+  uint  rx_src_challenger_ip [ FD_SHRED_MCAST_SRC_MAX ];
+  ulong rx_src_challenger_cnt[ FD_SHRED_MCAST_SRC_MAX ];
 
   /* tick → nanosecond conversion factor (populated in unprivileged_init) */
   double tick_per_ns;
@@ -451,8 +459,29 @@ before_credit( fd_shred_mcast_ctx_t * ctx,
       uchar const * raw    = bufs[ i ];
       ulong         raw_sz = msgs[ i ].msg_len;
 
-      /* Track the sender's IP (network byte order) for labeling */
-      ctx->metrics.rx_src_sender_ip[ s ] = (ulong)src_addrs[ i ].sin_addr.s_addr;
+      /* Sticky sender IP tracking: maintain champion (most cumulative packets)
+         per mcast socket.  A challenger only displaces the champion once it
+         has accumulated strictly more packets. */
+      uint sender_ip = src_addrs[ i ].sin_addr.s_addr;
+      if( FD_LIKELY( sender_ip != 0U ) ) {
+        if( FD_LIKELY( sender_ip == ctx->rx_src_champion_ip[ s ] ) || ctx->rx_src_champion_ip[ s ] == 0U ) {
+          ctx->rx_src_champion_ip[ s ] = sender_ip;
+          ctx->rx_src_champion_cnt[ s ]++;
+        } else if( sender_ip == ctx->rx_src_challenger_ip[ s ] ) {
+          ctx->rx_src_challenger_cnt[ s ]++;
+          if( ctx->rx_src_challenger_cnt[ s ] > ctx->rx_src_champion_cnt[ s ] ) {
+            ctx->rx_src_champion_ip[ s ]   = ctx->rx_src_challenger_ip[ s ];
+            ctx->rx_src_champion_cnt[ s ]  = ctx->rx_src_challenger_cnt[ s ];
+            ctx->rx_src_challenger_ip[ s ]  = 0U;
+            ctx->rx_src_challenger_cnt[ s ] = 0UL;
+          }
+        } else {
+          /* New IP — becomes challenger, displacing previous challenger */
+          ctx->rx_src_challenger_ip[ s ]  = sender_ip;
+          ctx->rx_src_challenger_cnt[ s ] = 1UL;
+        }
+        ctx->metrics.rx_src_sender_ip[ s ] = (ulong)ctx->rx_src_champion_ip[ s ];
+      }
 
       fd_shred_t const * shred = fd_shred_parse( raw, raw_sz );
       if( FD_UNLIKELY( !shred ) ) { ctx->metrics.parse_failed++; ctx->metrics.rx_src_parse_failed[ s ]++; continue; }

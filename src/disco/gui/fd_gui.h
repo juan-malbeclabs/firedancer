@@ -300,7 +300,8 @@ struct fd_gui_network_stats {
   ulong mcast_src_bytes       [ FD_SHRED_MCAST_SRC_MAX ];
   ulong mcast_src_dedup       [ FD_SHRED_MCAST_SRC_MAX ];
   ulong mcast_src_parse_failed[ FD_SHRED_MCAST_SRC_MAX ];
-  char  mcast_src_label       [ FD_SHRED_MCAST_SRC_MAX ][ 24 ];
+  char  mcast_src_label       [ FD_SHRED_MCAST_SRC_MAX ][ 24 ]; /* sender IP (champion) */
+  char  mcast_src_grp_label   [ FD_SHRED_MCAST_SRC_MAX ][ 24 ]; /* multicast group IP:port */
 
   /* Shred source race tracking (from smcast tile).
      Source indices: 0..FD_SHRED_MCAST_SRC_MAX-1 = mcast srcs, FD_SHRED_MCAST_SRC_MAX = turbine.

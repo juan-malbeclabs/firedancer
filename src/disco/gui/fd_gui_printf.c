@@ -717,7 +717,7 @@ fd_gui_printf_network_metrics( fd_gui_t *                     gui,
       /* Build a source label */
       char label[ 28 ];
       if( s<FD_SHRED_MCAST_SRC_MAX && s<cur->mcast_src_cnt ) {
-        fd_memcpy( label, cur->mcast_src_label[ s ], 24UL );
+        fd_memcpy( label, cur->mcast_src_grp_label[ s ], 24UL );
         label[ 23 ] = '\0';
       } else if( s==FD_SHRED_MCAST_SRC_MAX ) {
         fd_memcpy( label, "turbine", 8 );

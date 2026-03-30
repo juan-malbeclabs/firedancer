@@ -140,7 +140,9 @@ race_finalize_slot( fd_shred_mcast_ctx_t * ctx,
 
 /* Record the arrival of a shred from the given source.  Updates race
    placement counters (first/second/third) and the delay histogram.
-   Must be called BEFORE dedup_check_and_set so we observe every source. */
+   Must be called BEFORE dedup_check_and_set so we observe every source.
+   Only shreds seen by TWO OR MORE sources contribute to first/second/third
+   counters — solo deliveries are not counted (no race occurred). */
 static inline void
 race_track_shred( fd_shred_mcast_ctx_t * ctx,
                   ulong                  slot,
@@ -166,12 +168,13 @@ race_track_shred( fd_shred_mcast_ctx_t * ctx,
   fd_shred_race_entry_t * e = &ctx->race[ ring_idx ].tbl[ tbl_idx ];
 
   if( e->full_key!=full_key ) {
-    /* Empty slot or hash collision — (re-)initialize for this shred. */
+    /* Empty slot or hash collision — (re-)initialize for this shred.
+       Do NOT increment first[] yet: we only count contested shreds
+       (2+ sources), so we wait until a second source arrives. */
     e->full_key     = full_key;
     e->src_first    = (uchar)source;
     e->sources_seen = (ushort)(1U << source);
     e->ts_first     = (ulong)ts;
-    ctx->race_metrics.first[ source ]++;
     return;
   }
 
@@ -181,8 +184,14 @@ race_track_shred( fd_shred_mcast_ctx_t * ctx,
   uint prev_cnt = (uint)__builtin_popcount( (uint)e->sources_seen );
   e->sources_seen = (ushort)(e->sources_seen | src_bit);
 
-  if( prev_cnt==1U ) ctx->race_metrics.second[ source ]++;
-  else               ctx->race_metrics.third [ source ]++;
+  if( prev_cnt==1U ) {
+    /* Second source: now we know this is a contested shred.
+       Retroactively credit the first source, then credit this one. */
+    ctx->race_metrics.first [ e->src_first ]++;
+    ctx->race_metrics.second[ source ]++;
+  } else {
+    ctx->race_metrics.third[ source ]++;
+  }
 
   long delay_ticks = ts - (long)e->ts_first;
   if( FD_LIKELY( delay_ticks>0L ) ) {

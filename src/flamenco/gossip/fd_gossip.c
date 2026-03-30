@@ -119,11 +119,17 @@ struct fd_gossip_private {
   fd_gossip_commit_fn  commit_fn;
   void *               acquire_commit_ctx;
 
-  /* Token-bucket bandwidth limiter (set via fd_gossip_set_bw_limit).
-     bw_refill_bytes_per_ns == 0.0 means the limiter is disabled. */
+  /* Token-bucket outgoing bandwidth limiter (set via fd_gossip_set_bw_limit).
+     bw_refill_bytes_per_ns == 0.0 means the TX limiter is disabled. */
   double bw_tokens_bytes;
   double bw_refill_bytes_per_ns;
   long   bw_last_refill_ns;
+
+  /* Incoming bandwidth limiter: 1-second sliding window.
+     rx_bw_limit_bytes_per_s == 0 means the RX limiter is disabled. */
+  ulong rx_bw_limit_bytes_per_s;
+  ulong rx_bw_window_bytes;
+  long  rx_bw_window_start_ns;
 };
 
 FD_FN_CONST ulong
@@ -265,6 +271,9 @@ fd_gossip_new( void *                    shmem,
   gossip->bw_tokens_bytes        = 0.0;
   gossip->bw_refill_bytes_per_ns = 0.0;
   gossip->bw_last_refill_ns      = now;
+  gossip->rx_bw_limit_bytes_per_s = 0UL;
+  gossip->rx_bw_window_bytes      = 0UL;
+  gossip->rx_bw_window_start_ns   = now;
 
   return gossip;
 }
@@ -302,8 +311,12 @@ fd_gossip_ping_tracker_metrics( fd_gossip_t const * gossip ) {
 void
 fd_gossip_set_bw_limit( fd_gossip_t * gossip,
                         ulong         limit_bytes_per_sec ) {
+  /* TX token-bucket limiter */
   gossip->bw_refill_bytes_per_ns = (double)limit_bytes_per_sec * 1e-9;
   gossip->bw_tokens_bytes        = (double)( FD_GOSSIP_MTU * 2UL ); /* initial burst allowance */
+  /* RX 1-second sliding window limiter */
+  gossip->rx_bw_limit_bytes_per_s = limit_bytes_per_sec;
+  gossip->rx_bw_window_bytes      = 0UL;
 }
 
 void
@@ -745,7 +758,21 @@ fd_gossip_rx( fd_gossip_t *       gossip,
               ulong               data_sz,
               long                now,
               fd_stem_context_t * stem ) {
-  /* TODO: Implement traffic shaper / bandwidth limiter */
+  /* Incoming bandwidth limiter: 1-second sliding window.
+     Reset the accumulator at the start of each new second, then drop the
+     packet silently if accepting it would exceed the configured limit. */
+  if( FD_UNLIKELY( gossip->rx_bw_limit_bytes_per_s > 0UL ) ) {
+    if( FD_UNLIKELY( now - gossip->rx_bw_window_start_ns >= (long)1e9 ) ) {
+      gossip->rx_bw_window_bytes     = 0UL;
+      gossip->rx_bw_window_start_ns  = now;
+    }
+    if( FD_UNLIKELY( gossip->rx_bw_window_bytes + data_sz > gossip->rx_bw_limit_bytes_per_s ) ) {
+      gossip->metrics->bw_limited_drop_cnt++;
+      return;
+    }
+    gossip->rx_bw_window_bytes += data_sz;
+  }
+
   FD_TEST( data_sz>=sizeof(fd_gossip_view_t) );
   fd_gossip_view_t const * view    = (fd_gossip_view_t const *)data;
   uchar const *            payload = data+sizeof(fd_gossip_view_t);

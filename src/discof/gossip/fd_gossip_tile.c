@@ -490,6 +490,7 @@ unprivileged_init( fd_topo_t *      topo,
   FD_TEST( ctx->gossip );
 
   fd_gossip_set_acquire_commit( ctx->gossip, gossip_acquire_fn, gossip_commit_fn, ctx );
+  fd_gossip_set_bw_limit( ctx->gossip, 2500000UL ); /* 20 Mbps incoming cap */
 
   FD_MGAUGE_SET( GOSSIP, CRDS_CAPACITY,        tile->gossip.max_entries     );
   FD_MGAUGE_SET( GOSSIP, CRDS_PEER_CAPACITY,   FD_CONTACT_INFO_TABLE_SIZE   );

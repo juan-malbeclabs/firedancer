@@ -3,6 +3,8 @@
 #include "../../disco/fd_disco.h"
 #include "../../disco/metrics/fd_metrics.h"
 #include "../../ballet/shred/fd_shred.h"
+#include "../../util/hist/fd_histf.h"
+#include "../../tango/tempo/fd_tempo.h"
 
 #include <errno.h>
 #include <netinet/in.h>
@@ -21,6 +23,25 @@
 
 /* Number of datagrams to receive in a single recvmmsg call */
 #define FD_SHRED_MCAST_RX_BURST (64UL)
+
+/* Race tracking: which source delivered each shred first?
+   Sources: 0..FD_SHRED_MCAST_SRC_MAX-1 = mcast sockets; FD_SHRED_MCAST_SRC_MAX = turbine. */
+#define FD_SHRED_RACE_SRC_CNT     (FD_SHRED_MCAST_SRC_MAX + 1UL)
+#define FD_SHRED_RACE_SRC_TURBINE (FD_SHRED_MCAST_SRC_MAX)
+
+/* Per-slot hash table of race entries.  4096 buckets covers a typical
+   slot (~1000–5000 shreds) with very low collision probability. */
+#define FD_SHRED_RACE_TBL_SZ   (4096UL)
+#define FD_SHRED_RACE_TBL_MASK (FD_SHRED_RACE_TBL_SZ - 1UL)
+#define FD_SHRED_RACE_KEY_EMPTY (0xFFFFFFFFU)  /* sentinel for unused entry */
+
+typedef struct {
+  uint   full_key;     /* (is_code<<16)|global_idx; FD_SHRED_RACE_KEY_EMPTY = unused */
+  uchar  src_first;    /* source index of first arrival */
+  uchar  _pad;
+  ushort sources_seen; /* bitmask: bit s set iff source s has delivered this shred */
+  ulong  ts_first;     /* fd_tickcount() of first arrival */
+} fd_shred_race_entry_t;  /* 16 bytes */
 
 typedef struct {
   /* Per-slot deduplication bitsets.  Indexed by slot % DEDUP_SLOT_CNT.
@@ -77,7 +98,98 @@ typedef struct {
     ulong rx_src_bytes [ FD_SHRED_MCAST_SRC_MAX ];
     ulong rx_src_dedup [ FD_SHRED_MCAST_SRC_MAX ];
   } metrics;
+
+  /* tick → nanosecond conversion factor (populated in unprivileged_init) */
+  double tick_per_ns;
+
+  /* Race tracking: per-slot hash table (indexed by slot % DEDUP_SLOT_CNT).
+     Tracks which source delivered each shred first, and the delay for
+     subsequent sources.  Evicted when the ring slot is reused for a new slot. */
+  struct {
+    ulong                 slot;
+    fd_shred_race_entry_t tbl[ FD_SHRED_RACE_TBL_SZ ];
+  } race[ FD_SHRED_MCAST_DEDUP_SLOT_CNT ];
+
+  /* Race placement counters and delay histograms.
+     Source index: 0..FD_SHRED_MCAST_SRC_MAX-1 = mcast; FD_SHRED_MCAST_SRC_MAX = turbine. */
+  struct {
+    ulong      first [ FD_SHRED_RACE_SRC_CNT ];
+    ulong      second[ FD_SHRED_RACE_SRC_CNT ];
+    ulong      third [ FD_SHRED_RACE_SRC_CNT ];
+    ulong      solo  [ FD_SHRED_RACE_SRC_CNT ];
+    fd_histf_t delay [ FD_SHRED_RACE_SRC_CNT ];
+  } race_metrics;
 } fd_shred_mcast_ctx_t;
+
+/* Finalize race stats for the given ring slot before eviction.
+   Scans the table for entries seen by only one source and increments
+   the "solo" counter for that source.  Must be called before the table
+   is cleared for a new slot. */
+static void
+race_finalize_slot( fd_shred_mcast_ctx_t * ctx,
+                    ulong                  ring_idx ) {
+  if( FD_UNLIKELY( ctx->race[ ring_idx ].slot==ULONG_MAX ) ) return;
+  fd_shred_race_entry_t const * tbl = ctx->race[ ring_idx ].tbl;
+  for( ulong i=0UL; i<FD_SHRED_RACE_TBL_SZ; i++ ) {
+    if( FD_LIKELY( tbl[i].full_key==FD_SHRED_RACE_KEY_EMPTY ) ) continue;
+    /* popcount(sources_seen)==1 means only one source delivered this shred */
+    if( FD_UNLIKELY( __builtin_popcount( (uint)tbl[i].sources_seen )==1 ) )
+      ctx->race_metrics.solo[ tbl[i].src_first ]++;
+  }
+}
+
+/* Record the arrival of a shred from the given source.  Updates race
+   placement counters (first/second/third) and the delay histogram.
+   Must be called BEFORE dedup_check_and_set so we observe every source. */
+static inline void
+race_track_shred( fd_shred_mcast_ctx_t * ctx,
+                  ulong                  slot,
+                  int                    is_code,
+                  ulong                  global_idx,
+                  ulong                  source,   /* 0..FD_SHRED_RACE_SRC_CNT-1 */
+                  long                   ts ) {    /* fd_tickcount() at arrival */
+  ulong ring_idx = slot % FD_SHRED_MCAST_DEDUP_SLOT_CNT;
+
+  if( FD_UNLIKELY( ctx->race[ ring_idx ].slot!=slot ) ) {
+    race_finalize_slot( ctx, ring_idx );
+    ctx->race[ ring_idx ].slot = slot;
+    /* FD_SHRED_RACE_KEY_EMPTY (0xFFFFFFFF) is the fill byte for the full_key
+       field at offset 0 of each 16-byte entry, so a 0xFF memset works. */
+    fd_memset( ctx->race[ ring_idx ].tbl, 0xFF,
+               FD_SHRED_RACE_TBL_SZ * sizeof(fd_shred_race_entry_t) );
+  }
+
+  if( FD_UNLIKELY( global_idx>=FD_SHRED_MCAST_MAX_SHREDS_PER_HALF ) ) return;
+
+  uint  full_key = (uint)global_idx | ((uint)is_code << 16);
+  ulong tbl_idx  = global_idx & FD_SHRED_RACE_TBL_MASK;
+  fd_shred_race_entry_t * e = &ctx->race[ ring_idx ].tbl[ tbl_idx ];
+
+  if( e->full_key!=full_key ) {
+    /* Empty slot or hash collision — (re-)initialize for this shred. */
+    e->full_key     = full_key;
+    e->src_first    = (uchar)source;
+    e->sources_seen = (ushort)(1U << source);
+    e->ts_first     = (ulong)ts;
+    ctx->race_metrics.first[ source ]++;
+    return;
+  }
+
+  ushort src_bit = (ushort)(1U << source);
+  if( e->sources_seen & src_bit ) return;  /* already recorded from this source */
+
+  uint prev_cnt = (uint)__builtin_popcount( (uint)e->sources_seen );
+  e->sources_seen = (ushort)(e->sources_seen | src_bit);
+
+  if( prev_cnt==1U ) ctx->race_metrics.second[ source ]++;
+  else               ctx->race_metrics.third [ source ]++;
+
+  long delay_ticks = ts - (long)e->ts_first;
+  if( FD_LIKELY( delay_ticks>0L ) ) {
+    ulong delay_ns = (ulong)( (double)delay_ticks / ctx->tick_per_ns );
+    fd_histf_sample( &ctx->race_metrics.delay[ source ], delay_ns );
+  }
+}
 
 /* Returns 1 if this (slot, is_code, global_idx) has already been seen
    and forwarded.  Returns 0 and marks it as seen if it is new.
@@ -236,6 +348,21 @@ unprivileged_init( fd_topo_t *      topo,
   for( ulong i=0UL; i<FD_SHRED_MCAST_DEDUP_SLOT_CNT; i++ )
     ctx->dedup[ i ].slot = ULONG_MAX;
 
+  /* Initialize race tracking tables */
+  ctx->tick_per_ns = fd_tempo_tick_per_ns( NULL );
+  for( ulong i=0UL; i<FD_SHRED_MCAST_DEDUP_SLOT_CNT; i++ ) {
+    ctx->race[ i ].slot = ULONG_MAX;
+    fd_memset( ctx->race[ i ].tbl, 0xFF,
+               FD_SHRED_RACE_TBL_SZ * sizeof(fd_shred_race_entry_t) );
+  }
+
+  /* Initialize race delay histograms */
+  for( ulong s=0UL; s<FD_SHRED_RACE_SRC_CNT; s++ ) {
+    fd_histf_join( fd_histf_new( &ctx->race_metrics.delay[ s ],
+                                 FD_MHIST_MIN( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_NANOS ),
+                                 FD_MHIST_MAX( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_NANOS ) ) );
+  }
+
   /* Set up input link workspaces (shred → shred_mcast) */
   for( ulong i=0UL; i<tile->in_cnt; i++ ) {
     fd_topo_link_t * link = &topo->links[ tile->in_link_id[ i ] ];
@@ -318,6 +445,8 @@ before_credit( fd_shred_mcast_ctx_t * ctx,
       int   is_code  = fd_shred_is_code( fd_shred_type( shred->variant ) );
       ulong global_i = (ulong)shred->fec_set_idx + (ulong)shred->idx;
 
+      race_track_shred( ctx, shred->slot, is_code, global_i, s, fd_tickcount() );
+
       if( dedup_check_and_set( ctx, shred->slot, is_code, global_i ) ) {
         ctx->metrics.dedup_skipped++;
         ctx->metrics.rx_src_dedup[ s ]++;
@@ -391,6 +520,8 @@ after_frag( fd_shred_mcast_ctx_t * ctx,
   int   is_code  = fd_shred_is_code( fd_shred_type( shred->variant ) );
   ulong global_i = (ulong)shred->fec_set_idx + (ulong)shred->idx;
 
+  race_track_shred( ctx, shred->slot, is_code, global_i, FD_SHRED_RACE_SRC_TURBINE, fd_tickcount() );
+
   if( dedup_check_and_set( ctx, shred->slot, is_code, global_i ) ) {
     ctx->metrics.dedup_skipped++;
     return;
@@ -422,6 +553,26 @@ metrics_write( fd_shred_mcast_ctx_t * ctx ) {
   }
   for( ulong i=0UL; i<FD_SHRED_MCAST_SRC_MAX; i++ ) {
     fd_metrics_tl[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_DEDUP_OFF + i ] = ctx->metrics.rx_src_dedup[ i ];
+  }
+
+  /* Race placement counters: stride 4 per source (first, second, third, solo).
+     Source indices 0..FD_SHRED_MCAST_SRC_MAX-1 = mcast; FD_SHRED_MCAST_SRC_MAX = turbine. */
+  for( ulong s=0UL; s<FD_SHRED_RACE_SRC_CNT; s++ ) {
+    ulong base = FD_METRICS_COUNTER_SHRED_MCAST_RACE_MCAST_SRC0_FIRST_OFF + 4UL*s;
+    fd_metrics_tl[ base + 0UL ] = ctx->race_metrics.first [ s ];
+    fd_metrics_tl[ base + 1UL ] = ctx->race_metrics.second[ s ];
+    fd_metrics_tl[ base + 2UL ] = ctx->race_metrics.third [ s ];
+    fd_metrics_tl[ base + 3UL ] = ctx->race_metrics.solo  [ s ];
+  }
+
+  /* Race delay histograms: stride (FD_HISTF_BUCKET_CNT+1) per source. */
+  for( ulong s=0UL; s<FD_SHRED_RACE_SRC_CNT; s++ ) {
+    ulong hist_base = FD_METRICS_HISTOGRAM_SHRED_MCAST_RACE_MCAST_SRC0_DELAY_NANOS_OFF
+                    + s * (FD_HISTF_BUCKET_CNT + 1UL);
+    fd_histf_t const * h = &ctx->race_metrics.delay[ s ];
+    for( ulong b=0UL; b<FD_HISTF_BUCKET_CNT; b++ )
+      fd_metrics_tl[ hist_base + b ] = h->counts[ b ];
+    fd_metrics_tl[ hist_base + FD_HISTF_BUCKET_CNT ] = h->sum;
   }
 }
 

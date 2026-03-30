@@ -706,6 +706,42 @@ fd_gui_printf_network_metrics( fd_gui_t *                     gui,
       jsonp_close_object( gui->http );
     }
   jsonp_close_array( gui->http );
+
+  /* Shred source race rankings.
+     Source indices: 0..FD_SHRED_MCAST_SRC_MAX-1 = mcast srcs, FD_SHRED_MCAST_SRC_MAX = turbine.
+     Counters are cumulative since process start.
+     delay_p95_us / delay_p99_us are percentiles of the delay-vs-first distribution (when not first). */
+  jsonp_open_array( gui->http, "shred_race" );
+    for( ulong s=0UL; s<FD_SHRED_MCAST_SRC_MAX+1UL; s++ ) {
+      /* Build a source label */
+      char label[ 28 ];
+      if( s<FD_SHRED_MCAST_SRC_MAX && s<cur->mcast_src_cnt ) {
+        fd_memcpy( label, cur->mcast_src_label[ s ], 24UL );
+        label[ 23 ] = '\0';
+      } else if( s==FD_SHRED_MCAST_SRC_MAX ) {
+        fd_memcpy( label, "turbine", 8 );
+      } else {
+        fd_cstr_printf( label, sizeof(label), NULL, "mcast_%lu", s );
+      }
+
+      ulong total   = cur->race_first[s] + cur->race_second[s] + cur->race_third[s];
+      ulong p95_ns  = FD_HISTF_BUCKET_CNT>0UL ? fd_histf_percentile( &cur->race_delay[s], 95U, ULONG_MAX ) : ULONG_MAX;
+      ulong p99_ns  = FD_HISTF_BUCKET_CNT>0UL ? fd_histf_percentile( &cur->race_delay[s], 99U, ULONG_MAX ) : ULONG_MAX;
+      double p95_us = (p95_ns==ULONG_MAX) ? -1.0 : (double)p95_ns / 1000.0;
+      double p99_us = (p99_ns==ULONG_MAX) ? -1.0 : (double)p99_ns / 1000.0;
+
+      jsonp_open_object( gui->http, NULL );
+        jsonp_string( gui->http, "label",       label                  );
+        jsonp_ulong(  gui->http, "first",        cur->race_first [ s ] );
+        jsonp_ulong(  gui->http, "second",       cur->race_second[ s ] );
+        jsonp_ulong(  gui->http, "third",        cur->race_third [ s ] );
+        jsonp_ulong(  gui->http, "solo",         cur->race_solo  [ s ] );
+        jsonp_ulong(  gui->http, "total",        total                  );
+        jsonp_double( gui->http, "delay_p95_us", p95_us                 );
+        jsonp_double( gui->http, "delay_p99_us", p99_us                 );
+      jsonp_close_object( gui->http );
+    }
+  jsonp_close_array( gui->http );
 }
 
 void

@@ -83,6 +83,63 @@ gossip_send_fn( void *                ctx,
   gossip_ctx->net_out->chunk = fd_dcache_compact_next( gossip_ctx->net_out->chunk, packet_sz, gossip_ctx->net_out->chunk0, gossip_ctx->net_out->wmark );
 }
 
+/* Returns a pointer to the payload area of the current dcache chunk so
+   that gossip can build pull-response messages in place without a memcpy.
+   The pointer is positioned immediately after the IP/UDP header space. */
+static uchar *
+gossip_acquire_fn( void * ctx ) {
+  fd_gossip_tile_ctx_t * gossip_ctx = (fd_gossip_tile_ctx_t *)ctx;
+  uchar * packet = (uchar *)fd_chunk_to_laddr( gossip_ctx->net_out->mem, gossip_ctx->net_out->chunk );
+  return packet + sizeof(fd_ip4_udp_hdrs_t);
+}
+
+/* Finalises and transmits a payload built via gossip_acquire_fn.
+   Writes the IP/UDP header in the space before the payload pointer and
+   publishes the fragment — mirroring gossip_send_fn without the memcpy. */
+static void
+gossip_commit_fn( void *                ctx,
+                  fd_stem_context_t *   stem,
+                  uchar *               payload,
+                  ulong                 payload_sz,
+                  fd_ip4_port_t const * peer_address,
+                  ulong                 tsorig ) {
+  fd_gossip_tile_ctx_t * gossip_ctx = (fd_gossip_tile_ctx_t *)ctx;
+
+  if( FD_UNLIKELY( gossip_ctx->restrict_to_entrypoints ) ) {
+    uint msg_type   = payload_sz>=4U ? FD_LOAD( uint, payload ) : UINT_MAX;
+    int is_ping_pong = ( msg_type==4U || msg_type==5U );
+    if( FD_LIKELY( !is_ping_pong ) ) {
+      int allowed = 0;
+      for( ulong i=0UL; i<gossip_ctx->entrypoints_cnt; i++ ) {
+        if( gossip_ctx->entrypoints[ i ].addr == peer_address->addr ) { allowed = 1; break; }
+      }
+      if( FD_UNLIKELY( !allowed ) ) return;
+    }
+  }
+
+  uchar * packet          = payload - sizeof(fd_ip4_udp_hdrs_t);
+  fd_ip4_udp_hdrs_t * hdr = (fd_ip4_udp_hdrs_t *)packet;
+  *hdr = *gossip_ctx->net_out_hdr;
+
+  fd_ip4_hdr_t * ip4 = hdr->ip4;
+  fd_udp_hdr_t * udp = hdr->udp;
+
+  ip4->net_tot_len = fd_ushort_bswap( (ushort)(payload_sz + sizeof(fd_udp_hdr_t) + sizeof(fd_ip4_hdr_t)) );
+  udp->net_len     = fd_ushort_bswap( (ushort)(payload_sz + sizeof(fd_udp_hdr_t)) );
+  ip4->daddr       = peer_address->addr;
+  udp->net_dport   = peer_address->port;
+  ip4->net_id      = fd_ushort_bswap( gossip_ctx->net_id++ );
+  ip4->check       = fd_ip4_hdr_check_fast( ip4 );
+  udp->check       = 0;
+
+  ulong tspub     = fd_frag_meta_ts_comp( fd_tickcount() );
+  ulong sig       = fd_disco_netmux_sig( peer_address->addr, peer_address->port, peer_address->addr, DST_PROTO_OUTGOING, sizeof(fd_ip4_udp_hdrs_t) );
+  ulong packet_sz = payload_sz + sizeof(fd_ip4_udp_hdrs_t);
+
+  fd_stem_publish( stem, gossip_ctx->net_out->idx, sig, gossip_ctx->net_out->chunk, packet_sz, 0UL, tspub, tsorig );
+  gossip_ctx->net_out->chunk = fd_dcache_compact_next( gossip_ctx->net_out->chunk, packet_sz, gossip_ctx->net_out->chunk0, gossip_ctx->net_out->wmark );
+}
+
 static void
 gossip_sign_fn( void *        ctx,
                 uchar const * data,
@@ -431,6 +488,8 @@ unprivileged_init( fd_topo_t *      topo,
                                                ctx->gossip_out,
                                                ctx->net_out ) );
   FD_TEST( ctx->gossip );
+
+  fd_gossip_set_acquire_commit( ctx->gossip, gossip_acquire_fn, gossip_commit_fn, ctx );
 
   FD_MGAUGE_SET( GOSSIP, CRDS_CAPACITY,        tile->gossip.max_entries     );
   FD_MGAUGE_SET( GOSSIP, CRDS_PEER_CAPACITY,   FD_CONTACT_INFO_TABLE_SIZE   );

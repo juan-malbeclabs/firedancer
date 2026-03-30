@@ -432,6 +432,28 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
       fd_cstr_printf( cur->mcast_src_label[ i ], 24UL, NULL, "%u.%u.%u.%u:%u",
                       ip & 0xFFU, (ip>>8) & 0xFFU, (ip>>16) & 0xFFU, (ip>>24) & 0xFFU, (uint)port );
     }
+
+    /* Race placement counters: stride 4 per source (first, second, third, solo).
+       Source order: 0..FD_SHRED_MCAST_SRC_MAX-1 = mcast; FD_SHRED_MCAST_SRC_MAX = turbine. */
+    for( ulong s=0UL; s<FD_SHRED_MCAST_SRC_MAX+1UL; s++ ) {
+      ulong base = FD_METRICS_COUNTER_SHRED_MCAST_RACE_MCAST_SRC0_FIRST_OFF + 4UL*s;
+      cur->race_first [ s ] = sm_met[ base + 0UL ];
+      cur->race_second[ s ] = sm_met[ base + 1UL ];
+      cur->race_third [ s ] = sm_met[ base + 2UL ];
+      cur->race_solo  [ s ] = sm_met[ base + 3UL ];
+    }
+
+    /* Race delay histograms: initialize structure then snapshot bucket counts. */
+    for( ulong s=0UL; s<FD_SHRED_MCAST_SRC_MAX+1UL; s++ ) {
+      fd_histf_new( &cur->race_delay[ s ],
+                    FD_MHIST_MIN( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_NANOS ),
+                    FD_MHIST_MAX( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_NANOS ) );
+      ulong hist_off = FD_METRICS_HISTOGRAM_SHRED_MCAST_RACE_MCAST_SRC0_DELAY_NANOS_OFF
+                     + s * (FD_HISTF_BUCKET_CNT + 1UL);
+      cur->race_delay[ s ].sum = sm_met[ hist_off + FD_HISTF_BUCKET_CNT ];
+      for( ulong b=0UL; b<FD_HISTF_BUCKET_CNT; b++ )
+        cur->race_delay[ s ].counts[ b ] = sm_met[ hist_off + b ];
+    }
   }
 }
 

@@ -65,6 +65,22 @@ typedef void (*fd_gossip_send_fn)( void *                 ctx,
                                    fd_ip4_port_t const *  peer_address,
                                    ulong                  now );
 
+/* Zero-copy send support (optional, see fd_gossip_set_acquire_commit()).
+   acquire_fn returns a pointer to at least FD_GOSSIP_MTU bytes of
+   writable payload space in the final output buffer (e.g. a dcache
+   chunk past the transport header).  Returns NULL if unavailable;
+   the caller then falls back to send_fn.
+   commit_fn finalises and transmits a previously acquired buffer. */
+
+typedef uchar * (*fd_gossip_acquire_fn)( void * ctx );
+
+typedef void (*fd_gossip_commit_fn)( void *                ctx,
+                                     fd_stem_context_t *   stem,
+                                     uchar *               payload,
+                                     ulong                 payload_sz,
+                                     fd_ip4_port_t const * peer_address,
+                                     ulong                 tsorig );
+
 typedef void (*fd_gossip_sign_fn)( void *         ctx,
                                    uchar const *  data,
                                    ulong          sz,
@@ -84,6 +100,10 @@ struct fd_gossip_metrics {
 
   ulong ci_rx_unrecognized_socket_tag_cnt;
   ulong ci_rx_ipv6_address_cnt;
+
+  /* Outgoing packets dropped because the token-bucket bandwidth limiter
+     had insufficient credit. */
+  ulong bw_limited_drop_cnt;
 };
 
 typedef struct fd_gossip_metrics fd_gossip_metrics_t;
@@ -228,6 +248,28 @@ fd_gossip_push_vote( fd_gossip_t *       gossip,
                      ulong               txn_sz,
                      fd_stem_context_t * stem,
                      long                now );
+
+/* fd_gossip_set_bw_limit() enables the outgoing token-bucket bandwidth
+   limiter.  limit_bytes_per_sec=0 disables the limiter (default).
+   When enabled, outgoing gossip packets are dropped (counted in
+   metrics->bw_limited_drop_cnt) if insufficient credit is available.
+   Burst allowance is set to FD_GOSSIP_MTU*2 bytes. */
+
+void
+fd_gossip_set_bw_limit( fd_gossip_t * gossip,
+                        ulong         limit_bytes_per_sec );
+
+/* fd_gossip_set_acquire_commit() registers optional zero-copy send
+   callbacks.  When both are non-NULL, pull-response messages are built
+   directly in the buffer returned by acquire_fn, eliminating the
+   fd_memcpy() in the default send path.  Pass NULL for both to disable
+   (default).  ctx is forwarded to both callbacks. */
+
+void
+fd_gossip_set_acquire_commit( fd_gossip_t *       gossip,
+                               fd_gossip_acquire_fn acquire_fn,
+                               fd_gossip_commit_fn  commit_fn,
+                               void *               ctx );
 
 FD_PROTOTYPES_END
 

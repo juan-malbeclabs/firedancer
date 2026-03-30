@@ -111,6 +111,19 @@ struct fd_gossip_private {
      fd_active_set_prune. */
   push_set_t *          active_pset;
   fd_gossip_out_ctx_t * gossip_net_out;
+
+  /* Optional zero-copy send callbacks (set via fd_gossip_set_acquire_commit).
+     When both are non-NULL, pull-response messages are built directly in the
+     dcache buffer returned by acquire_fn, skipping the send_fn memcpy path. */
+  fd_gossip_acquire_fn acquire_fn;
+  fd_gossip_commit_fn  commit_fn;
+  void *               acquire_commit_ctx;
+
+  /* Token-bucket bandwidth limiter (set via fd_gossip_set_bw_limit).
+     bw_refill_bytes_per_ns == 0.0 means the limiter is disabled. */
+  double bw_tokens_bytes;
+  double bw_refill_bytes_per_ns;
+  long   bw_last_refill_ns;
 };
 
 FD_FN_CONST ulong
@@ -246,6 +259,13 @@ fd_gossip_new( void *                    shmem,
 
   fd_memset( gossip->metrics, 0, sizeof(fd_gossip_metrics_t) );
 
+  gossip->acquire_fn             = NULL;
+  gossip->commit_fn              = NULL;
+  gossip->acquire_commit_ctx     = NULL;
+  gossip->bw_tokens_bytes        = 0.0;
+  gossip->bw_refill_bytes_per_ns = 0.0;
+  gossip->bw_last_refill_ns      = now;
+
   return gossip;
 }
 
@@ -279,6 +299,23 @@ fd_gossip_ping_tracker_metrics( fd_gossip_t const * gossip ) {
   return fd_ping_tracker_metrics( gossip->ping_tracker );
 }
 
+void
+fd_gossip_set_bw_limit( fd_gossip_t * gossip,
+                        ulong         limit_bytes_per_sec ) {
+  gossip->bw_refill_bytes_per_ns = (double)limit_bytes_per_sec * 1e-9;
+  gossip->bw_tokens_bytes        = (double)( FD_GOSSIP_MTU * 2UL ); /* initial burst allowance */
+}
+
+void
+fd_gossip_set_acquire_commit( fd_gossip_t *        gossip,
+                               fd_gossip_acquire_fn acquire_fn,
+                               fd_gossip_commit_fn  commit_fn,
+                               void *               ctx ) {
+  gossip->acquire_fn         = acquire_fn;
+  gossip->commit_fn          = commit_fn;
+  gossip->acquire_commit_ctx = ctx;
+}
+
 static fd_ip4_port_t
 random_entrypoint( fd_gossip_t const * gossip ) {
   ulong idx = fd_rng_ulong_roll( gossip->rng, gossip->entrypoints_cnt );
@@ -293,7 +330,33 @@ txbuild_flush( fd_gossip_t *         gossip,
                long                  now ) {
   if( FD_UNLIKELY( !txbuild->crds_len ) ) return;
 
-  gossip->send_fn( gossip->send_ctx, stem, txbuild->bytes, txbuild->bytes_len, &dest_addr, (ulong)now );
+  /* Token-bucket bandwidth limiter.  Refill proportionally to elapsed time,
+     cap at a two-MTU burst, then deduct the packet size.  Drop the packet
+     (counting it in metrics) if insufficient credit is available. */
+  if( FD_UNLIKELY( gossip->bw_refill_bytes_per_ns > 0.0 ) ) {
+    double elapsed     = (double)( now - gossip->bw_last_refill_ns );
+    gossip->bw_tokens_bytes += elapsed * gossip->bw_refill_bytes_per_ns;
+    double burst_cap   = (double)( FD_GOSSIP_MTU * 2UL );
+    if( gossip->bw_tokens_bytes > burst_cap ) gossip->bw_tokens_bytes = burst_cap;
+    gossip->bw_last_refill_ns = now;
+
+    if( FD_UNLIKELY( gossip->bw_tokens_bytes < (double)txbuild->bytes_len ) ) {
+      gossip->metrics->bw_limited_drop_cnt++;
+      fd_gossip_txbuild_init( txbuild, gossip->identity_pubkey, txbuild->tag );
+      return;
+    }
+    gossip->bw_tokens_bytes -= (double)txbuild->bytes_len;
+  }
+
+  /* Zero-copy path: use commit_fn when the txbuild is using an external
+     dcache buffer (bytes != _bytes).  Otherwise fall back to send_fn. */
+  if( FD_LIKELY( gossip->commit_fn && txbuild->bytes != txbuild->_bytes ) ) {
+    gossip->commit_fn( gossip->acquire_commit_ctx, stem, txbuild->bytes, txbuild->bytes_len,
+                       &dest_addr, (ulong)now );
+  } else {
+    gossip->send_fn( gossip->send_ctx, stem, txbuild->bytes, txbuild->bytes_len,
+                     &dest_addr, (ulong)now );
+  }
 
   gossip->metrics->message_tx[ txbuild->tag ]++;
   gossip->metrics->message_tx_bytes[ txbuild->tag ] += txbuild->bytes_len+42UL; /* 42 = sizeof(fd_ip4_udp_hdrs_t) */
@@ -447,8 +510,6 @@ rx_pull_request( fd_gossip_t *                         gossip,
                  fd_ip4_port_t                         peer_addr,
                  fd_stem_context_t *                   stem,
                  long                                  now ) {
-  /* TODO: Implement data budget? Or at least limit iteration range */
-
   fd_bloom_t filter[1];
   filter->keys_len = pr_view->bloom_keys_len;
   filter->keys     = (ulong *)( payload + pr_view->bloom_keys_offset );
@@ -456,8 +517,11 @@ rx_pull_request( fd_gossip_t *                         gossip,
   filter->bits_len = pr_view->bloom_bits_cnt;
   filter->bits     = (ulong *)( payload + pr_view->bloom_bits_offset );
 
+  /* Acquire a dcache buffer for zero-copy if available, otherwise the
+     txbuild will use its internal _bytes[] fallback. */
   fd_gossip_txbuild_t pull_resp[1];
-  fd_gossip_txbuild_init( pull_resp, gossip->identity_pubkey, FD_GOSSIP_MESSAGE_PULL_RESPONSE );
+  uchar * ext_buf = gossip->acquire_fn ? gossip->acquire_fn( gossip->acquire_commit_ctx ) : NULL;
+  fd_gossip_txbuild_init_ext( pull_resp, gossip->identity_pubkey, FD_GOSSIP_MESSAGE_PULL_RESPONSE, ext_buf );
 
   uchar iter_mem[ 16UL ];
 
@@ -467,16 +531,15 @@ rx_pull_request( fd_gossip_t *                         gossip,
     fd_crds_entry_t const * candidate = fd_crds_mask_iter_entry( it, gossip->crds );
 
     /* TODO: Add jitter here? */
-    // if( FD_UNLIKELY( fd_crds_value_wallclock( candidate )>contact_info->wallclock_nanos ) ) continue;
 
     if( FD_UNLIKELY( !fd_bloom_contains( filter, fd_crds_entry_hash( candidate ), 32UL ) ) ) continue;
 
     uchar const * crds_val;
     ulong         crds_size;
     fd_crds_entry_value( candidate, &crds_val, &crds_size );
-    if( FD_UNLIKELY( !fd_gossip_txbuild_can_fit( pull_resp, crds_size ) ) ) {
-      txbuild_flush( gossip, pull_resp, stem, peer_addr, now );
-    }
+    /* Data budget: stop iterating once the single response packet is full.
+       This bounds the per-pull-request CPU and bandwidth cost. */
+    if( FD_UNLIKELY( !fd_gossip_txbuild_can_fit( pull_resp, crds_size ) ) ) break;
     fd_gossip_txbuild_append( pull_resp, crds_size, crds_val );
   }
 
@@ -718,9 +781,37 @@ fd_gossip_push_vote( fd_gossip_t *       gossip,
                      ulong               txn_sz,
                      fd_stem_context_t * stem,
                      long                now ) {
-  /* TODO: we can avoid addt'l memcpy if we pass a propely laid out
-     crds buffer instead */
-  uchar crds_val[ FD_GOSSIP_CRDS_MAX_SZ ];
+  /* Determine which peers will receive this push so we can encode directly
+     into the first peer's txbuild buffer, eliminating one memcpy.
+     For additional peers the encoded bytes are copied from the first peer's
+     buffer, saving one encoding pass relative to the old approach. */
+  ulong out_nodes[ 12UL ];
+  ulong out_nodes_cnt = fd_active_set_nodes( gossip->active_set,
+                                             gossip->identity_pubkey,
+                                             gossip->identity_stake,
+                                             gossip->identity_pubkey,
+                                             gossip->identity_stake,
+                                             0UL,
+                                             out_nodes );
+
+  /* Try to reserve space in the first peer's txbuild for zero-copy encode.
+     Fall back to a stack buffer if there are no peers or reserve fails. */
+  uchar              stack_buf[ FD_GOSSIP_CRDS_MAX_SZ ];
+  uchar *            crds_val    = stack_buf;
+  push_set_entry_t * first_entry = NULL;
+  ulong              first_idx   = ULONG_MAX;
+
+  if( FD_LIKELY( out_nodes_cnt > 0UL ) ) {
+    first_idx   = out_nodes[ 0 ];
+    first_entry = pset_entry_pool_ele( gossip->active_pset->pool, first_idx );
+    uchar * reserved = fd_gossip_txbuild_reserve( first_entry->txbuild, FD_GOSSIP_CRDS_MAX_SZ );
+    if( FD_UNLIKELY( !reserved ) ) {
+      active_push_set_flush( gossip, gossip->active_pset, first_idx, stem, now );
+      reserved = fd_gossip_txbuild_reserve( first_entry->txbuild, FD_GOSSIP_CRDS_MAX_SZ );
+    }
+    if( FD_LIKELY( reserved ) ) crds_val = reserved;
+  }
+
   ulong crds_val_sz;
   fd_gossip_crds_vote_encode( crds_val,
                               FD_GOSSIP_CRDS_MAX_SZ,
@@ -729,7 +820,6 @@ fd_gossip_push_vote( fd_gossip_t *       gossip,
                               gossip->identity_pubkey,
                               now,
                               &crds_val_sz );
-  fd_gossip_view_crds_value_t value[1];
 
   gossip->sign_fn( gossip->sign_ctx,
                    crds_val+64UL,
@@ -737,6 +827,7 @@ fd_gossip_push_vote( fd_gossip_t *       gossip,
                    FD_KEYGUARD_SIGN_TYPE_ED25519,
                    crds_val );
 
+  fd_gossip_view_crds_value_t value[1];
   value->tag                   = FD_GOSSIP_VALUE_VOTE;
   value->value_off             = 0UL;
   value->length                = (ushort)crds_val_sz;
@@ -748,19 +839,40 @@ fd_gossip_push_vote( fd_gossip_t *       gossip,
   vote->txn_off                = 64UL+1UL+32UL; /* Signature + vote index + pubkey */
 
   int res = fd_crds_checks_fast( gossip->crds, value, crds_val, 0 );
-  if( FD_UNLIKELY( res ) ) return -1;
+  if( FD_UNLIKELY( res ) ) return -1; /* reserve not committed; txbuild state unchanged */
 
-  fd_crds_entry_t const * entry = fd_crds_insert( gossip->crds, value, crds_val, gossip->identity_stake, 1, /* is_me */ now, stem );
+  fd_crds_entry_t const * entry = fd_crds_insert( gossip->crds, value, crds_val,
+                                                  gossip->identity_stake, 1, /* is_me */ now, stem );
   if( FD_UNLIKELY( !entry ) ) return -1;
 
-  active_push_set_insert( gossip,
-                          crds_val,
-                          crds_val_sz,
-                          gossip->identity_pubkey,
-                          gossip->identity_stake,
-                          stem,
-                          now,
-                          1 /* flush_immediately */ );
+  if( FD_LIKELY( first_entry && crds_val != stack_buf ) ) {
+    /* Zero-copy path: commit to first peer and flush immediately.
+       After txbuild_flush() the old encoded bytes remain at crds_val
+       (bytes 44+ of _bytes are not overwritten by the new header), so we
+       can safely memcpy from crds_val into the remaining peers' buffers. */
+    fd_gossip_txbuild_commit( first_entry->txbuild, crds_val_sz );
+    active_push_set_flush( gossip, gossip->active_pset, first_idx, stem, now );
+
+    for( ulong j=1UL; j<out_nodes_cnt; j++ ) {
+      ulong              idx  = out_nodes[ j ];
+      push_set_entry_t * peer = pset_entry_pool_ele( gossip->active_pset->pool, idx );
+      if( FD_UNLIKELY( !fd_gossip_txbuild_can_fit( peer->txbuild, crds_val_sz ) ) ) {
+        active_push_set_flush( gossip, gossip->active_pset, idx, stem, now );
+      }
+      fd_gossip_txbuild_append( peer->txbuild, crds_val_sz, crds_val );
+      active_push_set_flush( gossip, gossip->active_pset, idx, stem, now );
+    }
+  } else {
+    /* Fallback: no peers or reserve failed; use the normal push path */
+    active_push_set_insert( gossip,
+                            crds_val,
+                            crds_val_sz,
+                            gossip->identity_pubkey,
+                            gossip->identity_stake,
+                            stem,
+                            now,
+                            1 /* flush_immediately */ );
+  }
   return 0;
 }
 
@@ -868,13 +980,15 @@ tx_pull_request( fd_gossip_t *       gossip,
 static inline long
 next_pull_request( fd_gossip_t const * gossip,
                    long                now ) {
-  (void)gossip;
-  /* TODO: Not always every 200 micros ... we should send less frequently
-     the table is smaller.  Agave sends 1024 every 200 millis, but
-     reduces 1024 to a lower amount as the table size shrinks...
-     replicate this in the frequency domain. */
-  /* TODO: Jitter */
-  return now+1600L*1000L;
+  /* Adaptive pull frequency: scale the inter-pull interval inversely with
+     CRDS table size.  At full table (1024+ entries) the interval is ~195µs
+     (≈1024 pulls per 200ms, matching Agave).  At smaller table sizes the
+     interval grows proportionally, down to one pull per 200ms when the
+     table has ≤1 entry.  This avoids flooding the network during bootstrap
+     when few peers are known. */
+  ulong crds_len = fd_crds_len( gossip->crds );
+  ulong clamped  = fd_ulong_max( 1UL, fd_ulong_min( crds_len, 1024UL ) );
+  return now + (long)( 200L*1000L*1000L / (long)clamped );
 }
 
 static inline void

@@ -1138,6 +1138,78 @@ metric introduced.
     <counter name="RxMcastSrc5Dedup"   summary="Shreds from multicast source 5 dropped as duplicates (lost the race)" />
     <counter name="RxMcastSrc6Dedup"   summary="Shreds from multicast source 6 dropped as duplicates (lost the race)" />
     <counter name="RxMcastSrc7Dedup"   summary="Shreds from multicast source 7 dropped as duplicates (lost the race)" />
+
+    <!-- Shred source race tracking: for each shred, which source delivered it first/second/third?
+         Source indices: 0..7 = mcast sources 0..7; 8 = turbine (unicast TVU path).
+         Counters are laid out as 4 consecutive slots per source (first, second, third, solo)
+         so C code can stride by 4: base_off + 4*src + placement.
+         Histograms are laid out consecutively (17 fd_metrics_tl slots each) in the same order. -->
+    <counter name="RaceMcastSrc0First"  summary="Shreds where multicast source 0 was first to deliver" />
+    <counter name="RaceMcastSrc0Second" summary="Shreds where multicast source 0 was second to deliver" />
+    <counter name="RaceMcastSrc0Third"  summary="Shreds where multicast source 0 arrived third or later" />
+    <counter name="RaceMcastSrc0Solo"   summary="Shreds delivered only by multicast source 0 (no other source delivered within the slot window)" />
+    <counter name="RaceMcastSrc1First"  summary="Shreds where multicast source 1 was first to deliver" />
+    <counter name="RaceMcastSrc1Second" summary="Shreds where multicast source 1 was second to deliver" />
+    <counter name="RaceMcastSrc1Third"  summary="Shreds where multicast source 1 arrived third or later" />
+    <counter name="RaceMcastSrc1Solo"   summary="Shreds delivered only by multicast source 1 (no other source delivered within the slot window)" />
+    <counter name="RaceMcastSrc2First"  summary="Shreds where multicast source 2 was first to deliver" />
+    <counter name="RaceMcastSrc2Second" summary="Shreds where multicast source 2 was second to deliver" />
+    <counter name="RaceMcastSrc2Third"  summary="Shreds where multicast source 2 arrived third or later" />
+    <counter name="RaceMcastSrc2Solo"   summary="Shreds delivered only by multicast source 2 (no other source delivered within the slot window)" />
+    <counter name="RaceMcastSrc3First"  summary="Shreds where multicast source 3 was first to deliver" />
+    <counter name="RaceMcastSrc3Second" summary="Shreds where multicast source 3 was second to deliver" />
+    <counter name="RaceMcastSrc3Third"  summary="Shreds where multicast source 3 arrived third or later" />
+    <counter name="RaceMcastSrc3Solo"   summary="Shreds delivered only by multicast source 3 (no other source delivered within the slot window)" />
+    <counter name="RaceMcastSrc4First"  summary="Shreds where multicast source 4 was first to deliver" />
+    <counter name="RaceMcastSrc4Second" summary="Shreds where multicast source 4 was second to deliver" />
+    <counter name="RaceMcastSrc4Third"  summary="Shreds where multicast source 4 arrived third or later" />
+    <counter name="RaceMcastSrc4Solo"   summary="Shreds delivered only by multicast source 4 (no other source delivered within the slot window)" />
+    <counter name="RaceMcastSrc5First"  summary="Shreds where multicast source 5 was first to deliver" />
+    <counter name="RaceMcastSrc5Second" summary="Shreds where multicast source 5 was second to deliver" />
+    <counter name="RaceMcastSrc5Third"  summary="Shreds where multicast source 5 arrived third or later" />
+    <counter name="RaceMcastSrc5Solo"   summary="Shreds delivered only by multicast source 5 (no other source delivered within the slot window)" />
+    <counter name="RaceMcastSrc6First"  summary="Shreds where multicast source 6 was first to deliver" />
+    <counter name="RaceMcastSrc6Second" summary="Shreds where multicast source 6 was second to deliver" />
+    <counter name="RaceMcastSrc6Third"  summary="Shreds where multicast source 6 arrived third or later" />
+    <counter name="RaceMcastSrc6Solo"   summary="Shreds delivered only by multicast source 6 (no other source delivered within the slot window)" />
+    <counter name="RaceMcastSrc7First"  summary="Shreds where multicast source 7 was first to deliver" />
+    <counter name="RaceMcastSrc7Second" summary="Shreds where multicast source 7 was second to deliver" />
+    <counter name="RaceMcastSrc7Third"  summary="Shreds where multicast source 7 arrived third or later" />
+    <counter name="RaceMcastSrc7Solo"   summary="Shreds delivered only by multicast source 7 (no other source delivered within the slot window)" />
+    <counter name="RaceTurbineFirst"    summary="Shreds where the turbine (unicast TVU) path was first to deliver" />
+    <counter name="RaceTurbineSecond"   summary="Shreds where the turbine (unicast TVU) path was second to deliver" />
+    <counter name="RaceTurbineThird"    summary="Shreds where the turbine (unicast TVU) path arrived third or later" />
+    <counter name="RaceTurbineSolo"     summary="Shreds delivered only by the turbine path (no other source delivered within the slot window)" />
+
+    <!-- Per-source delay histograms: nanoseconds behind the first arrival for non-first arrivals.
+         Range: 1µs (1000 ns) to 100ms (100_000_000 ns).  Same source order as counters above. -->
+    <histogram name="RaceMcastSrc0DelayNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 0, when not first</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc1DelayNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 1, when not first</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc2DelayNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 2, when not first</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc3DelayNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 3, when not first</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc4DelayNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 4, when not first</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc5DelayNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 5, when not first</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc6DelayNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 6, when not first</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc7DelayNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 7, when not first</summary>
+    </histogram>
+    <histogram name="RaceTurbineDelayNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for the turbine path, when not first</summary>
+    </histogram>
 </tile>
 
 </metrics>

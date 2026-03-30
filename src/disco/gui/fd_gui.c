@@ -428,10 +428,17 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
       cur->mcast_src_bytes       [ i ] = sm_met[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SHREDS_OFF       + 2UL*i+1UL ];
       cur->mcast_src_dedup       [ i ] = sm_met[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_DEDUP_OFF        + i         ];
       cur->mcast_src_parse_failed[ i ] = sm_met[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_PARSE_FAILED_OFF + i         ];
-      uint   ip   = smcast->shred_mcast.mcast_src_ips  [ i ];
-      ushort port = smcast->shred_mcast.mcast_src_ports [ i ];
-      fd_cstr_printf( cur->mcast_src_label[ i ], 24UL, NULL, "%u.%u.%u.%u:%u",
-                      ip & 0xFFU, (ip>>8) & 0xFFU, (ip>>16) & 0xFFU, (ip>>24) & 0xFFU, (uint)port );
+      /* Label: use the actual packet sender IP when observed, else fall back to multicast group IP:port */
+      uint sender_ip = (uint)sm_met[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SENDER_IP_OFF + i ];
+      if( FD_LIKELY( sender_ip != 0U ) ) {
+        fd_cstr_printf( cur->mcast_src_label[ i ], 24UL, NULL, "%u.%u.%u.%u",
+                        sender_ip & 0xFFU, (sender_ip>>8) & 0xFFU, (sender_ip>>16) & 0xFFU, (sender_ip>>24) & 0xFFU );
+      } else {
+        uint   grp_ip   = smcast->shred_mcast.mcast_src_ips  [ i ];
+        ushort grp_port = smcast->shred_mcast.mcast_src_ports [ i ];
+        fd_cstr_printf( cur->mcast_src_label[ i ], 24UL, NULL, "%u.%u.%u.%u:%u",
+                        grp_ip & 0xFFU, (grp_ip>>8) & 0xFFU, (grp_ip>>16) & 0xFFU, (grp_ip>>24) & 0xFFU, (uint)grp_port );
+      }
     }
 
     /* Race placement counters: stride 4 per source (first, second, third, solo).

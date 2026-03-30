@@ -98,6 +98,7 @@ typedef struct {
     ulong rx_src_bytes       [ FD_SHRED_MCAST_SRC_MAX ];
     ulong rx_src_dedup       [ FD_SHRED_MCAST_SRC_MAX ];
     ulong rx_src_parse_failed[ FD_SHRED_MCAST_SRC_MAX ];
+    ulong rx_src_sender_ip   [ FD_SHRED_MCAST_SRC_MAX ]; /* last observed sender IPv4 (network byte order) */
   } metrics;
 
   /* tick → nanosecond conversion factor (populated in unprivileged_init) */
@@ -421,17 +422,18 @@ before_credit( fd_shred_mcast_ctx_t * ctx,
                fd_stem_context_t *    stem,
                int *                  charge_busy ) {
   /* Declare static arrays to avoid large stack frames */
-  static struct mmsghdr msgs[ FD_SHRED_MCAST_RX_BURST ];
-  static struct iovec   iovs[ FD_SHRED_MCAST_RX_BURST ];
-  static uchar          bufs[ FD_SHRED_MCAST_RX_BURST ][ FD_SHRED_MAX_SZ ];
+  static struct mmsghdr    msgs     [ FD_SHRED_MCAST_RX_BURST ];
+  static struct iovec      iovs     [ FD_SHRED_MCAST_RX_BURST ];
+  static uchar             bufs     [ FD_SHRED_MCAST_RX_BURST ][ FD_SHRED_MAX_SZ ];
+  static struct sockaddr_in src_addrs[ FD_SHRED_MCAST_RX_BURST ];
 
   for( ulong i=0UL; i<FD_SHRED_MCAST_RX_BURST; i++ ) {
     iovs[ i ].iov_base              = bufs[ i ];
     iovs[ i ].iov_len               = FD_SHRED_MAX_SZ;
     msgs[ i ].msg_hdr.msg_iov       = &iovs[ i ];
     msgs[ i ].msg_hdr.msg_iovlen    = 1;
-    msgs[ i ].msg_hdr.msg_name      = NULL;
-    msgs[ i ].msg_hdr.msg_namelen   = 0;
+    msgs[ i ].msg_hdr.msg_name      = &src_addrs[ i ];
+    msgs[ i ].msg_hdr.msg_namelen   = sizeof(struct sockaddr_in);
     msgs[ i ].msg_hdr.msg_control   = NULL;
     msgs[ i ].msg_hdr.msg_controllen= 0;
   }
@@ -448,6 +450,9 @@ before_credit( fd_shred_mcast_ctx_t * ctx,
     for( int i=0; i<cnt; i++ ) {
       uchar const * raw    = bufs[ i ];
       ulong         raw_sz = msgs[ i ].msg_len;
+
+      /* Track the sender's IP (network byte order) for labeling */
+      ctx->metrics.rx_src_sender_ip[ s ] = (ulong)src_addrs[ i ].sin_addr.s_addr;
 
       fd_shred_t const * shred = fd_shred_parse( raw, raw_sz );
       if( FD_UNLIKELY( !shred ) ) { ctx->metrics.parse_failed++; ctx->metrics.rx_src_parse_failed[ s ]++; continue; }
@@ -587,6 +592,9 @@ metrics_write( fd_shred_mcast_ctx_t * ctx ) {
   }
   for( ulong i=0UL; i<FD_SHRED_MCAST_SRC_MAX; i++ ) {
     fd_metrics_tl[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_PARSE_FAILED_OFF + i ] = ctx->metrics.rx_src_parse_failed[ i ];
+  }
+  for( ulong i=0UL; i<FD_SHRED_MCAST_SRC_MAX; i++ ) {
+    fd_metrics_tl[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SENDER_IP_OFF + i ] = ctx->metrics.rx_src_sender_ip[ i ];
   }
 
   /* Race placement counters: stride 4 per source (first, second, third, solo).

@@ -279,6 +279,7 @@ fd_config_extract_pod( uchar *       pod,
 
   CFG_POP        ( bool,    tiles.shred_mcast.enabled                      );
   CFG_POP_ARRAY  ( cstr,    tiles.shred_mcast.mcast_srcs                  );
+  CFG_POP_ARRAY  ( cstr,    tiles.shred_mcast.mcast_src_names             );
   CFG_POP_ARRAY  ( cstr,    tiles.shred_mcast.mcast_dsts                  );
   CFG_POP        ( uint,    tiles.shred_mcast.mcast_ttl                    );
 

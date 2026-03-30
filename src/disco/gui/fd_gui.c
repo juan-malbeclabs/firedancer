@@ -439,12 +439,17 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
         fd_cstr_printf( cur->mcast_src_label[ i ], 24UL, NULL, "%u.%u.%u.%u:%u",
                         grp_ip & 0xFFU, (grp_ip>>8) & 0xFFU, (grp_ip>>16) & 0xFFU, (grp_ip>>24) & 0xFFU, (uint)grp_port );
       }
-      /* Group label: always multicast group IP:port (used for Shred Race card) */
+      /* Group label: configured name if set, otherwise multicast group IP:port */
       {
-        uint   grp_ip   = smcast->shred_mcast.mcast_src_ips  [ i ];
-        ushort grp_port = smcast->shred_mcast.mcast_src_ports [ i ];
-        fd_cstr_printf( cur->mcast_src_grp_label[ i ], 24UL, NULL, "%u.%u.%u.%u:%u",
-                        grp_ip & 0xFFU, (grp_ip>>8) & 0xFFU, (grp_ip>>16) & 0xFFU, (grp_ip>>24) & 0xFFU, (uint)grp_port );
+        char const * name = smcast->shred_mcast.mcast_src_names[ i ];
+        if( FD_LIKELY( name[0] != '\0' ) ) {
+          fd_cstr_ncpy( cur->mcast_src_grp_label[ i ], name, 24UL );
+        } else {
+          uint   grp_ip   = smcast->shred_mcast.mcast_src_ips  [ i ];
+          ushort grp_port = smcast->shred_mcast.mcast_src_ports [ i ];
+          fd_cstr_printf( cur->mcast_src_grp_label[ i ], 24UL, NULL, "%u.%u.%u.%u:%u",
+                          grp_ip & 0xFFU, (grp_ip>>8) & 0xFFU, (grp_ip>>16) & 0xFFU, (grp_ip>>24) & 0xFFU, (uint)grp_port );
+        }
       }
     }
 

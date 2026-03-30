@@ -1384,6 +1384,11 @@ user = ""
         # different ports; a separate UDP socket is opened for each.
         mcast_srcs = []
 
+        # Optional human-readable names for each mcast source, shown in the GUI
+        # instead of the IP:port.  Must have the same length as mcast_srcs, or
+        # be empty.  Use "" to leave a specific source unnamed.
+        mcast_src_names = []
+
         # Destination multicast groups to forward shreds to.
         # Each entry is "A.B.C.D:PORT".  All destinations share a
         # single TX socket; one sendto() is issued per destination

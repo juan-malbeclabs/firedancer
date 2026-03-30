@@ -533,6 +533,7 @@ struct fd_topo_tile {
       ulong  mcast_src_cnt;
       uint   mcast_src_ips  [ FD_SHRED_MCAST_SRC_MAX ]; /* network byte order */
       ushort mcast_src_ports[ FD_SHRED_MCAST_SRC_MAX ]; /* host byte order    */
+      char   mcast_src_names[ FD_SHRED_MCAST_SRC_MAX ][ 32 ]; /* optional human-readable name; empty string = use IP:port */
       ulong  mcast_dst_cnt;
       uint   mcast_dst_ips  [ FD_SHRED_MCAST_DST_MAX ]; /* network byte order */
       ushort mcast_dst_ports[ FD_SHRED_MCAST_DST_MAX ]; /* host byte order    */

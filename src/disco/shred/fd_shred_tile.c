@@ -934,6 +934,26 @@ after_frag( fd_shred_ctx_t *    ctx,
       if( FD_LIKELY( fd_disco_netmux_sig_proto( sig ) != DST_PROTO_REPAIR ) &&
           FD_LIKELY( !ctx->in_is_mcast[ in_idx ] ) ) {
         for( ulong i=0UL; i<ctx->adtl_dests_retransmit_cnt; i++ ) send_shred( ctx, stem, shred, ctx->adtl_dests_retransmit+i, ctx->tsorig );
+
+        /* Forward raw turbine shred to smcast tile so it can race against
+           mcast sources and build a complete winner stream.  Uses the raw
+           shred (no FEC resolver) because we have no epoch leaders. */
+        if( FD_UNLIKELY( ctx->mcast_out_idx!=ULONG_MAX ) ) {
+          ulong shred_sz = fd_shred_sz( shred );
+          uchar * dst = fd_chunk_to_laddr( ctx->mcast_out_mem, ctx->mcast_out_chunk );
+          fd_memcpy( dst, shred, shred_sz );
+          int  is_code               = fd_shred_is_code( fd_shred_type( shred->variant ) );
+          uint shred_idx_or_data_cnt = shred->idx;
+          if( FD_LIKELY( is_code ) ) shred_idx_or_data_cnt = shred->code.data_cnt;
+          ulong mcast_sig = fd_disco_shred_out_shred_sig( fd_disco_netmux_sig_proto(sig)==DST_PROTO_SHRED,
+                                                          shred->slot,
+                                                          shred->fec_set_idx,
+                                                          is_code,
+                                                          shred_idx_or_data_cnt );
+          ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
+          fd_stem_publish( stem, ctx->mcast_out_idx, mcast_sig, ctx->mcast_out_chunk, shred_sz, 0UL, ctx->tsorig, tspub );
+          ctx->mcast_out_chunk = fd_dcache_compact_next( ctx->mcast_out_chunk, shred_sz, ctx->mcast_out_chunk0, ctx->mcast_out_wmark );
+        }
       }
       return;
     }

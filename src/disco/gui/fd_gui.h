@@ -296,10 +296,11 @@ struct fd_gui_network_stats {
 
   /* Per-source multicast stats (from smcast tile) */
   ulong mcast_src_cnt;
-  ulong mcast_src_shreds[ FD_SHRED_MCAST_SRC_MAX ];
-  ulong mcast_src_bytes [ FD_SHRED_MCAST_SRC_MAX ];
-  ulong mcast_src_dedup [ FD_SHRED_MCAST_SRC_MAX ];
-  char  mcast_src_label [ FD_SHRED_MCAST_SRC_MAX ][ 24 ];
+  ulong mcast_src_shreds      [ FD_SHRED_MCAST_SRC_MAX ];
+  ulong mcast_src_bytes       [ FD_SHRED_MCAST_SRC_MAX ];
+  ulong mcast_src_dedup       [ FD_SHRED_MCAST_SRC_MAX ];
+  ulong mcast_src_parse_failed[ FD_SHRED_MCAST_SRC_MAX ];
+  char  mcast_src_label       [ FD_SHRED_MCAST_SRC_MAX ][ 24 ];
 
   /* Shred source race tracking (from smcast tile).
      Source indices: 0..FD_SHRED_MCAST_SRC_MAX-1 = mcast srcs, FD_SHRED_MCAST_SRC_MAX = turbine.

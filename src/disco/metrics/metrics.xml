@@ -1138,6 +1138,14 @@ metric introduced.
     <counter name="RxMcastSrc5Dedup"   summary="Shreds from multicast source 5 dropped as duplicates (lost the race)" />
     <counter name="RxMcastSrc6Dedup"   summary="Shreds from multicast source 6 dropped as duplicates (lost the race)" />
     <counter name="RxMcastSrc7Dedup"   summary="Shreds from multicast source 7 dropped as duplicates (lost the race)" />
+    <counter name="RxMcastSrc0ParseFailed" summary="Shreds from multicast source 0 dropped due to parse failure (fd_shred_parse returned NULL)" />
+    <counter name="RxMcastSrc1ParseFailed" summary="Shreds from multicast source 1 dropped due to parse failure" />
+    <counter name="RxMcastSrc2ParseFailed" summary="Shreds from multicast source 2 dropped due to parse failure" />
+    <counter name="RxMcastSrc3ParseFailed" summary="Shreds from multicast source 3 dropped due to parse failure" />
+    <counter name="RxMcastSrc4ParseFailed" summary="Shreds from multicast source 4 dropped due to parse failure" />
+    <counter name="RxMcastSrc5ParseFailed" summary="Shreds from multicast source 5 dropped due to parse failure" />
+    <counter name="RxMcastSrc6ParseFailed" summary="Shreds from multicast source 6 dropped due to parse failure" />
+    <counter name="RxMcastSrc7ParseFailed" summary="Shreds from multicast source 7 dropped due to parse failure" />
 
     <!-- Shred source race tracking: for each shred, which source delivered it first/second/third?
          Source indices: 0..7 = mcast sources 0..7; 8 = turbine (unicast TVU path).

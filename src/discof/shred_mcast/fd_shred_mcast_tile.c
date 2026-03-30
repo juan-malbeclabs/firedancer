@@ -94,9 +94,10 @@ typedef struct {
     ulong tx_relay_bytes;
     ulong dedup_skipped;
     ulong parse_failed;
-    ulong rx_src_shreds[ FD_SHRED_MCAST_SRC_MAX ];
-    ulong rx_src_bytes [ FD_SHRED_MCAST_SRC_MAX ];
-    ulong rx_src_dedup [ FD_SHRED_MCAST_SRC_MAX ];
+    ulong rx_src_shreds      [ FD_SHRED_MCAST_SRC_MAX ];
+    ulong rx_src_bytes       [ FD_SHRED_MCAST_SRC_MAX ];
+    ulong rx_src_dedup       [ FD_SHRED_MCAST_SRC_MAX ];
+    ulong rx_src_parse_failed[ FD_SHRED_MCAST_SRC_MAX ];
   } metrics;
 
   /* tick → nanosecond conversion factor (populated in unprivileged_init) */
@@ -449,7 +450,7 @@ before_credit( fd_shred_mcast_ctx_t * ctx,
       ulong         raw_sz = msgs[ i ].msg_len;
 
       fd_shred_t const * shred = fd_shred_parse( raw, raw_sz );
-      if( FD_UNLIKELY( !shred ) ) { ctx->metrics.parse_failed++; continue; }
+      if( FD_UNLIKELY( !shred ) ) { ctx->metrics.parse_failed++; ctx->metrics.rx_src_parse_failed[ s ]++; continue; }
 
       int   is_code  = fd_shred_is_code( fd_shred_type( shred->variant ) );
       ulong global_i = (ulong)shred->fec_set_idx + (ulong)shred->idx;
@@ -583,6 +584,9 @@ metrics_write( fd_shred_mcast_ctx_t * ctx ) {
   }
   for( ulong i=0UL; i<FD_SHRED_MCAST_SRC_MAX; i++ ) {
     fd_metrics_tl[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_DEDUP_OFF + i ] = ctx->metrics.rx_src_dedup[ i ];
+  }
+  for( ulong i=0UL; i<FD_SHRED_MCAST_SRC_MAX; i++ ) {
+    fd_metrics_tl[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_PARSE_FAILED_OFF + i ] = ctx->metrics.rx_src_parse_failed[ i ];
   }
 
   /* Race placement counters: stride 4 per source (first, second, third, solo).

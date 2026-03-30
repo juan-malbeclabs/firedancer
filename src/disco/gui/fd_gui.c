@@ -424,9 +424,10 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
     if( FD_UNLIKELY( src_cnt>FD_SHRED_MCAST_SRC_MAX ) ) src_cnt = FD_SHRED_MCAST_SRC_MAX;
     cur->mcast_src_cnt = src_cnt;
     for( ulong i=0UL; i<src_cnt; i++ ) {
-      cur->mcast_src_shreds[ i ] = sm_met[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SHREDS_OFF + 2UL*i     ];
-      cur->mcast_src_bytes [ i ] = sm_met[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SHREDS_OFF + 2UL*i+1UL ];
-      cur->mcast_src_dedup [ i ] = sm_met[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_DEDUP_OFF  + i         ];
+      cur->mcast_src_shreds      [ i ] = sm_met[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SHREDS_OFF       + 2UL*i     ];
+      cur->mcast_src_bytes       [ i ] = sm_met[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SHREDS_OFF       + 2UL*i+1UL ];
+      cur->mcast_src_dedup       [ i ] = sm_met[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_DEDUP_OFF        + i         ];
+      cur->mcast_src_parse_failed[ i ] = sm_met[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_PARSE_FAILED_OFF + i         ];
       uint   ip   = smcast->shred_mcast.mcast_src_ips  [ i ];
       ushort port = smcast->shred_mcast.mcast_src_ports [ i ];
       fd_cstr_printf( cur->mcast_src_label[ i ], 24UL, NULL, "%u.%u.%u.%u:%u",

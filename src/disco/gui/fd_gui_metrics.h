@@ -22,18 +22,22 @@ fd_gui_metrics_sum_tiles_counter( fd_topo_t const * topo,
   return total;
 }
 
-/* Sum all GOSSVF MESSAGE_RX_BYTES enum counters (20 entries starting at _OFF). */
+/* Sum only the 6 success_* GOSSVF MESSAGE_RX_BYTES outcomes (offsets 39-44).
+   Dropped/filtered bytes do not represent actual network ingress. */
 static inline ulong
 fd_gui_metrics_gossip_total_ingress_bytes( fd_topo_t const * topo, ulong gossvf_tile_cnt ) {
   ulong total = 0UL;
-  ulong base_off = FD_METRICS_COUNTER_GOSSVF_MESSAGE_RX_BYTES_OFF;
-  ulong cnt      = FD_METRICS_COUNTER_GOSSVF_MESSAGE_RX_BYTES_CNT;
   for( ulong i=0UL; i<topo->tile_cnt; i++ ) {
     if( FD_UNLIKELY( !strcmp( topo->tiles[ i ].name, "gossvf" ) ) ) {
       FD_TEST( topo->tiles[ i ].kind_id < gossvf_tile_cnt );
       fd_topo_tile_t const * tile = &topo->tiles[ i ];
       volatile ulong const * tile_metrics = fd_metrics_tile( tile->metrics );
-      for( ulong j=0UL; j<cnt; j++ ) total += tile_metrics[ base_off + j ];
+      total += tile_metrics[ FD_METRICS_COUNTER_GOSSVF_MESSAGE_RX_BYTES_SUCCESS_PULL_REQUEST_OFF  ];
+      total += tile_metrics[ FD_METRICS_COUNTER_GOSSVF_MESSAGE_RX_BYTES_SUCCESS_PULL_RESPONSE_OFF ];
+      total += tile_metrics[ FD_METRICS_COUNTER_GOSSVF_MESSAGE_RX_BYTES_SUCCESS_PUSH_OFF          ];
+      total += tile_metrics[ FD_METRICS_COUNTER_GOSSVF_MESSAGE_RX_BYTES_SUCCESS_PRUNE_OFF         ];
+      total += tile_metrics[ FD_METRICS_COUNTER_GOSSVF_MESSAGE_RX_BYTES_SUCCESS_PING_OFF          ];
+      total += tile_metrics[ FD_METRICS_COUNTER_GOSSVF_MESSAGE_RX_BYTES_SUCCESS_PONG_OFF          ];
     }
   }
   return total;

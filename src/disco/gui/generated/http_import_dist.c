@@ -25,12 +25,12 @@ FD_IMPORT_BINARY( file_stable6_gzip, "src/disco/gui/dist_stable_cmp/assets/frank
 FD_IMPORT_BINARY( file_stable7, "src/disco/gui/dist_stable/assets/frankendancer_logo-CHyfJ772.svg" );
 FD_IMPORT_BINARY( file_stable7_zstd, "src/disco/gui/dist_stable_cmp/assets/frankendancer_logo-CHyfJ772.svg.zst" );
 FD_IMPORT_BINARY( file_stable7_gzip, "src/disco/gui/dist_stable_cmp/assets/frankendancer_logo-CHyfJ772.svg.gz" );
-FD_IMPORT_BINARY( file_stable8, "src/disco/gui/dist_stable/assets/index-CHVxxq_U.css" );
-FD_IMPORT_BINARY( file_stable8_zstd, "src/disco/gui/dist_stable_cmp/assets/index-CHVxxq_U.css.zst" );
-FD_IMPORT_BINARY( file_stable8_gzip, "src/disco/gui/dist_stable_cmp/assets/index-CHVxxq_U.css.gz" );
-FD_IMPORT_BINARY( file_stable9, "src/disco/gui/dist_stable/assets/index-CdboiafG.js" );
-FD_IMPORT_BINARY( file_stable9_zstd, "src/disco/gui/dist_stable_cmp/assets/index-CdboiafG.js.zst" );
-FD_IMPORT_BINARY( file_stable9_gzip, "src/disco/gui/dist_stable_cmp/assets/index-CdboiafG.js.gz" );
+FD_IMPORT_BINARY( file_stable8, "src/disco/gui/dist_stable/assets/index-Bc6tqNhG.js" );
+FD_IMPORT_BINARY( file_stable8_zstd, "src/disco/gui/dist_stable_cmp/assets/index-Bc6tqNhG.js.zst" );
+FD_IMPORT_BINARY( file_stable8_gzip, "src/disco/gui/dist_stable_cmp/assets/index-Bc6tqNhG.js.gz" );
+FD_IMPORT_BINARY( file_stable9, "src/disco/gui/dist_stable/assets/index-CHVxxq_U.css" );
+FD_IMPORT_BINARY( file_stable9_zstd, "src/disco/gui/dist_stable_cmp/assets/index-CHVxxq_U.css.zst" );
+FD_IMPORT_BINARY( file_stable9_gzip, "src/disco/gui/dist_stable_cmp/assets/index-CHVxxq_U.css.gz" );
 FD_IMPORT_BINARY( file_stable10, "src/disco/gui/dist_stable/assets/inter-tight-latin-400-normal-BLrFJfvD.woff" );
 FD_IMPORT_BINARY( file_stable10_zstd, "src/disco/gui/dist_stable_cmp/assets/inter-tight-latin-400-normal-BLrFJfvD.woff.zst" );
 FD_IMPORT_BINARY( file_stable10_gzip, "src/disco/gui/dist_stable_cmp/assets/inter-tight-latin-400-normal-BLrFJfvD.woff.gz" );
@@ -235,7 +235,7 @@ fd_http_static_file_t STATIC_FILES_STABLE[] = {
 		.gzip_data_len = &file_stable7_gzip_sz,
 	},
 	{
-		.name = "/assets/index-CHVxxq_U.css",
+		.name = "/assets/index-Bc6tqNhG.js",
 		.data = file_stable8,
 		.data_len = &file_stable8_sz,
 		.zstd_data = file_stable8_zstd,
@@ -244,7 +244,7 @@ fd_http_static_file_t STATIC_FILES_STABLE[] = {
 		.gzip_data_len = &file_stable8_gzip_sz,
 	},
 	{
-		.name = "/assets/index-CdboiafG.js",
+		.name = "/assets/index-CHVxxq_U.css",
 		.data = file_stable9,
 		.data_len = &file_stable9_sz,
 		.zstd_data = file_stable9_zstd,

@@ -240,13 +240,16 @@ void
 after_credit( fd_gossip_tile_ctx_t * ctx,
               fd_stem_context_t *    stem,
               int *                  opt_poll_in FD_PARAM_UNUSED,
-              int *                  charge_busy FD_PARAM_UNUSED ) {
+              int *                  charge_busy ) {
   ctx->stem = stem;
 
   if( FD_UNLIKELY( !ctx->my_contact_info->shred_version ) ) return;
 
   long now = ctx->last_wallclock + (long)((double)(fd_tickcount()-ctx->last_tickcount)/ctx->ticks_per_ns);
+  if( FD_LIKELY( now < ctx->next_advance_ns ) ) return;
+  ctx->next_advance_ns = now + 1000000L; /* 1 ms */
   fd_gossip_advance( ctx->gossip, now, stem );
+  *charge_busy = 1;
 }
 
 static void

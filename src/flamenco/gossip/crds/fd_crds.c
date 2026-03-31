@@ -594,8 +594,12 @@ expire( fd_crds_t *         crds,
   static const long SLOT_DURATION_NANOS            = 400L*1000L*1000L;
   static const long STAKED_EXPIRE_DURATION_NANOS   = 432000L*SLOT_DURATION_NANOS;
   static const long UNSTAKED_EXPIRE_DURATION_NANOS = 15L*1000L*1000L*1000L;
+  static const ulong CRDS_EXPIRE_BATCH_MAX          = 64UL;
 
-  while( !staked_expire_dlist_is_empty( crds->staked_expire_dlist, crds->pool ) ) {
+  ulong batch;
+
+  batch = CRDS_EXPIRE_BATCH_MAX;
+  while( batch-- && !staked_expire_dlist_is_empty( crds->staked_expire_dlist, crds->pool ) ) {
     fd_crds_entry_t * head = staked_expire_dlist_ele_peek_head( crds->staked_expire_dlist, crds->pool );
 
     if( FD_LIKELY( head->expire.wallclock_nanos>now-STAKED_EXPIRE_DURATION_NANOS ) ) break;
@@ -615,7 +619,8 @@ expire( fd_crds_t *         crds,
                                                     UNSTAKED_EXPIRE_DURATION_NANOS,
                                                     STAKED_EXPIRE_DURATION_NANOS );
 
-  while( !unstaked_expire_dlist_is_empty( crds->unstaked_expire_dlist, crds->pool ) ) {
+  batch = CRDS_EXPIRE_BATCH_MAX;
+  while( batch-- && !unstaked_expire_dlist_is_empty( crds->unstaked_expire_dlist, crds->pool ) ) {
     fd_crds_entry_t * head = unstaked_expire_dlist_ele_peek_head( crds->unstaked_expire_dlist, crds->pool );
 
     if( FD_LIKELY( head->expire.wallclock_nanos>now-unstaked_expire_duration_nanos ) ) break;
@@ -631,7 +636,8 @@ expire( fd_crds_t *         crds,
     crds->metrics->expired_cnt++;
   }
 
-  while( !purged_dlist_is_empty( crds->purged.purged_dlist, crds->purged.pool ) ) {
+  batch = CRDS_EXPIRE_BATCH_MAX;
+  while( batch-- && !purged_dlist_is_empty( crds->purged.purged_dlist, crds->purged.pool ) ) {
     fd_crds_purged_t * head = purged_dlist_ele_peek_head( crds->purged.purged_dlist, crds->purged.pool );
 
     if( FD_LIKELY( head->expire.wallclock_nanos>now-60L*1000L*1000L*1000L ) ) break;
@@ -644,7 +650,8 @@ expire( fd_crds_t *         crds,
     crds->metrics->purged_expired_cnt++;
   }
 
-  while( !failed_inserts_dlist_is_empty( crds->purged.failed_inserts_dlist, crds->purged.pool ) ) {
+  batch = CRDS_EXPIRE_BATCH_MAX;
+  while( batch-- && !failed_inserts_dlist_is_empty( crds->purged.failed_inserts_dlist, crds->purged.pool ) ) {
     fd_crds_purged_t * head = failed_inserts_dlist_ele_peek_head( crds->purged.failed_inserts_dlist, crds->purged.pool );
 
     if( FD_LIKELY( head->expire.wallclock_nanos>now-20L*1000L*1000L*1000L ) ) break;

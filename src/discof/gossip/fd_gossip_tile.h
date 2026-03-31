@@ -27,6 +27,7 @@ struct fd_gossip_tile_ctx {
   double ticks_per_ns;
   long   last_wallclock;
   long   last_tickcount;
+  long   next_advance_ns;
 
   fd_stake_weight_t * stake_weights_converted;
 

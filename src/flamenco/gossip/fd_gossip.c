@@ -88,6 +88,8 @@ struct fd_gossip_private {
     long next_active_set_refresh;
     long next_contact_info_refresh;
     long next_flush_push_state;
+    long next_crds_advance;
+    long next_ping;
   } timers;
 
   /* Callbacks */
@@ -253,6 +255,8 @@ fd_gossip_new( void *                    shmem,
   gossip->timers.next_active_set_refresh = 0L;
   gossip->timers.next_contact_info_refresh = 0L;
   gossip->timers.next_flush_push_state = 0L;
+  gossip->timers.next_crds_advance = 0L;
+  gossip->timers.next_ping = 0L;
 
   gossip->send_fn  = send_fn;
   gossip->send_ctx = send_ctx;
@@ -917,11 +921,12 @@ tx_ping( fd_gossip_t *       gossip,
   uchar const *         peer_pubkey;
   uchar const *         ping_token;
   fd_ip4_port_t const * peer_address;
-  while( fd_ping_tracker_pop_request( gossip->ping_tracker,
-                                      now,
-                                      &peer_pubkey,
-                                      &peer_address,
-                                      &ping_token ) ) {
+  ulong batch = 64UL;
+  while( batch-- && fd_ping_tracker_pop_request( gossip->ping_tracker,
+                                                 now,
+                                                 &peer_pubkey,
+                                                 &peer_address,
+                                                 &ping_token ) ) {
     fd_memcpy( out_ping->ping_token, ping_token, 32UL );
 
     gossip->sign_fn( gossip->sign_ctx, out_ping->ping_token, 32UL, FD_KEYGUARD_SIGN_TYPE_ED25519, out_ping->signature );
@@ -1059,9 +1064,18 @@ void
 fd_gossip_advance( fd_gossip_t *       gossip,
                    long                now,
                    fd_stem_context_t * stem ) {
-  fd_crds_advance( gossip->crds, now, stem );
-  tx_ping( gossip, stem, now );
-  flush_stale_push_states( gossip, stem, now );
+  if( FD_UNLIKELY( now>=gossip->timers.next_crds_advance ) ) {
+    fd_crds_advance( gossip->crds, now, stem );
+    gossip->timers.next_crds_advance = now+100L*1000L*1000L; /* 100 ms */
+  }
+  if( FD_UNLIKELY( now>=gossip->timers.next_ping ) ) {
+    tx_ping( gossip, stem, now );
+    gossip->timers.next_ping = now+1L*1000L*1000L; /* 1 ms */
+  }
+  if( FD_UNLIKELY( now>=gossip->timers.next_flush_push_state ) ) {
+    flush_stale_push_states( gossip, stem, now );
+    gossip->timers.next_flush_push_state = now+1L*1000L*1000L; /* 1 ms */
+  }
   if( FD_UNLIKELY( now>=gossip->timers.next_pull_request ) ) {
     tx_pull_request( gossip, stem, now );
     gossip->timers.next_pull_request = next_pull_request( gossip, now );

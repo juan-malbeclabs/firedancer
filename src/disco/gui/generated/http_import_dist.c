@@ -28,9 +28,9 @@ FD_IMPORT_BINARY( file_stable7_gzip, "src/disco/gui/dist_stable_cmp/assets/frank
 FD_IMPORT_BINARY( file_stable8, "src/disco/gui/dist_stable/assets/index-CHVxxq_U.css" );
 FD_IMPORT_BINARY( file_stable8_zstd, "src/disco/gui/dist_stable_cmp/assets/index-CHVxxq_U.css.zst" );
 FD_IMPORT_BINARY( file_stable8_gzip, "src/disco/gui/dist_stable_cmp/assets/index-CHVxxq_U.css.gz" );
-FD_IMPORT_BINARY( file_stable9, "src/disco/gui/dist_stable/assets/index-DZJN4gi8.js" );
-FD_IMPORT_BINARY( file_stable9_zstd, "src/disco/gui/dist_stable_cmp/assets/index-DZJN4gi8.js.zst" );
-FD_IMPORT_BINARY( file_stable9_gzip, "src/disco/gui/dist_stable_cmp/assets/index-DZJN4gi8.js.gz" );
+FD_IMPORT_BINARY( file_stable9, "src/disco/gui/dist_stable/assets/index-CYVLQ5Ne.js" );
+FD_IMPORT_BINARY( file_stable9_zstd, "src/disco/gui/dist_stable_cmp/assets/index-CYVLQ5Ne.js.zst" );
+FD_IMPORT_BINARY( file_stable9_gzip, "src/disco/gui/dist_stable_cmp/assets/index-CYVLQ5Ne.js.gz" );
 FD_IMPORT_BINARY( file_stable10, "src/disco/gui/dist_stable/assets/inter-tight-latin-400-normal-BLrFJfvD.woff" );
 FD_IMPORT_BINARY( file_stable10_zstd, "src/disco/gui/dist_stable_cmp/assets/inter-tight-latin-400-normal-BLrFJfvD.woff.zst" );
 FD_IMPORT_BINARY( file_stable10_gzip, "src/disco/gui/dist_stable_cmp/assets/inter-tight-latin-400-normal-BLrFJfvD.woff.gz" );
@@ -246,7 +246,7 @@ fd_http_static_file_t STATIC_FILES_STABLE[] = {
   { .name = "/assets/frankendancer_circle_logo-D5z79vwQ.svg", .data = file_stable6, .data_len = &file_stable6_sz, .zstd_data = file_stable6_zstd, .zstd_data_len = &file_stable6_zstd_sz, .gzip_data = file_stable6_gzip, .gzip_data_len = &file_stable6_gzip_sz, },
   { .name = "/assets/frankendancer_logo-CHyfJ772.svg", .data = file_stable7, .data_len = &file_stable7_sz, .zstd_data = file_stable7_zstd, .zstd_data_len = &file_stable7_zstd_sz, .gzip_data = file_stable7_gzip, .gzip_data_len = &file_stable7_gzip_sz, },
   { .name = "/assets/index-CHVxxq_U.css", .data = file_stable8, .data_len = &file_stable8_sz, .zstd_data = file_stable8_zstd, .zstd_data_len = &file_stable8_zstd_sz, .gzip_data = file_stable8_gzip, .gzip_data_len = &file_stable8_gzip_sz, },
-  { .name = "/assets/index-DZJN4gi8.js", .data = file_stable9, .data_len = &file_stable9_sz, .zstd_data = file_stable9_zstd, .zstd_data_len = &file_stable9_zstd_sz, .gzip_data = file_stable9_gzip, .gzip_data_len = &file_stable9_gzip_sz, },
+  { .name = "/assets/index-CYVLQ5Ne.js", .data = file_stable9, .data_len = &file_stable9_sz, .zstd_data = file_stable9_zstd, .zstd_data_len = &file_stable9_zstd_sz, .gzip_data = file_stable9_gzip, .gzip_data_len = &file_stable9_gzip_sz, },
   { .name = "/assets/inter-tight-latin-400-normal-BLrFJfvD.woff", .data = file_stable10, .data_len = &file_stable10_sz, .zstd_data = file_stable10_zstd, .zstd_data_len = &file_stable10_zstd_sz, .gzip_data = file_stable10_gzip, .gzip_data_len = &file_stable10_gzip_sz, },
   { .name = "/assets/inter-tight-latin-400-normal-iW8qmuJY.woff2", .data = file_stable11, .data_len = &file_stable11_sz, .zstd_data = file_stable11_zstd, .zstd_data_len = &file_stable11_zstd_sz, .gzip_data = file_stable11_gzip, .gzip_data_len = &file_stable11_gzip_sz, },
   { .name = "/assets/privateYou-DnAsYVZD.svg", .data = file_stable12, .data_len = &file_stable12_sz, .zstd_data = file_stable12_zstd, .zstd_data_len = &file_stable12_zstd_sz, .gzip_data = file_stable12_gzip, .gzip_data_len = &file_stable12_gzip_sz, },

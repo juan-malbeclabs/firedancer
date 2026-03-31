@@ -766,6 +766,9 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
       tile->shred_mcast.mcast_src_ips  [ i ] = src_parsed.ip;
       tile->shred_mcast.mcast_src_ports[ i ] = src_parsed.port;
       tile->shred_mcast.mcast_rx_socks [ i ] = -1;
+      if( FD_LIKELY( i<config->tiles.shred_mcast.mcast_src_names_cnt ) )
+        fd_cstr_ncpy( tile->shred_mcast.mcast_src_names[ i ], config->tiles.shred_mcast.mcast_src_names[ i ],
+                      sizeof(tile->shred_mcast.mcast_src_names[ i ]) );
     }
     ulong dst_cnt = config->tiles.shred_mcast.mcast_dsts_cnt;
     if( FD_UNLIKELY( dst_cnt>FD_SHRED_MCAST_DST_MAX ) )

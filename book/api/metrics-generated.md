@@ -1161,6 +1161,7 @@
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;tx_&#8203;relay_&#8203;bytes</span> | counter | Bytes forwarded to multicast destinations from the external multicast relay path (mcast-in to mcast-out) |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;dedup_&#8203;skipped</span> | counter | Number of shreds dropped because they were already seen from the other source |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;parse_&#8203;failed</span> | counter | Number of shreds dropped because fd_shred_parse() returned NULL |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;sig_&#8203;failed</span> | counter | Number of shreds from the multicast source dropped because the leader signature did not verify |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src0_&#8203;shreds</span> | counter | Number of shreds received from multicast source 0 |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src0_&#8203;bytes</span> | counter | Number of bytes received from multicast source 0 |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;rx_&#8203;mcast_&#8203;src1_&#8203;shreds</span> | counter | Number of shreds received from multicast source 1 |

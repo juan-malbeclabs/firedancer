@@ -281,6 +281,7 @@ struct fd_gui_network_stats {
     ulong shreds;           /* count of turbine shreds received */
     ulong mcast_shreds;     /* count of shreds received on multicast port */
     ulong dedup_skipped;    /* shreds dropped by smcast tile as duplicates (seen from other source) */
+    ulong sig_failed;       /* shreds from mcast dropped due to invalid leader signature */
     ulong shred_processed[6]; /* FEC resolver result: [0]=bad_slot [1]=parse_failed [2]=rejected [3]=ignored [4]=okay [5]=completes */
     ulong dexf_fec_sets;  /* FEC sets forwarded to dexf tile */
   } in;

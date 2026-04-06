@@ -686,6 +686,7 @@ fd_gui_printf_network_metrics( fd_gui_t *                     gui,
     jsonp_ulong( gui->http, NULL, cur->in.shred_processed[4] ); /* idx 15: okay */
     jsonp_ulong( gui->http, NULL, cur->in.shred_processed[5] ); /* idx 16: completes */
     jsonp_ulong( gui->http, NULL, cur->in.dexf_fec_sets    ); /* idx 17: FEC sets forwarded to dexf */
+    jsonp_ulong( gui->http, NULL, cur->in.sig_failed       ); /* idx 18: mcast shreds with bad leader sig */
   jsonp_close_array( gui->http );
   jsonp_open_array( gui->http, "egress" );
     jsonp_ulong( gui->http, NULL, cur->out.turbine_unicast ); /* idx 0: turbine.unicast */

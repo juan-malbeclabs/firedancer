@@ -383,6 +383,7 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
   cur->out.turbine_mcast = 0UL;
   cur->out.mcast_relay   = 0UL;
   cur->in.dedup_skipped  = 0UL;
+  cur->in.sig_failed     = 0UL;
   ulong smcast_eg_idx = fd_topo_find_tile( topo, "smcast", 0UL );
   if( FD_LIKELY( smcast_eg_idx!=ULONG_MAX ) ) {
     fd_topo_tile_t const * smcast_eg = &topo->tiles[ smcast_eg_idx ];
@@ -390,6 +391,7 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
     cur->out.turbine_mcast = sm_eg_met[ FD_METRICS_COUNTER_SHRED_MCAST_TX_MCAST_BYTES_OFF  ];
     cur->out.mcast_relay   = sm_eg_met[ FD_METRICS_COUNTER_SHRED_MCAST_TX_RELAY_BYTES_OFF  ];
     cur->in.dedup_skipped  = sm_eg_met[ FD_METRICS_COUNTER_SHRED_MCAST_DEDUP_SKIPPED_OFF   ];
+    cur->in.sig_failed     = sm_eg_met[ FD_METRICS_COUNTER_SHRED_MCAST_SIG_FAILED_OFF      ];
   }
 
   cur->in.repair = fd_gui_metrics_sum_tiles_counter( topo, "shred", shred_tile_cnt, MIDX( COUNTER, SHRED, SHRED_REPAIR_RCV_BYTES ) );

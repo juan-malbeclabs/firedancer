@@ -2,7 +2,12 @@
 #include "../../disco/topo/fd_topo.h"
 #include "../../disco/fd_disco.h"
 #include "../../disco/metrics/fd_metrics.h"
+#include "../../disco/shred/fd_stake_ci.h"
 #include "../../ballet/shred/fd_shred.h"
+#include "../../ballet/bmtree/fd_bmtree.h"
+#include "../../ballet/ed25519/fd_ed25519.h"
+#include "../../ballet/sha512/fd_sha512.h"
+#include "../../ballet/reedsol/fd_reedsol.h"
 #include "../../util/hist/fd_histf.h"
 #include "../../tango/tempo/fd_tempo.h"
 
@@ -23,6 +28,19 @@
 
 /* Number of datagrams to receive in a single recvmmsg call */
 #define FD_SHRED_MCAST_RX_BURST (64UL)
+
+/* Shreds per FEC set.  Mirrors the private define in fd_fec_resolver.c. */
+#define FD_SHRED_MCAST_FEC_SHRED_CNT (32UL)
+
+/* Number of FEC sets per slot half (fec_set_idx is a multiple of FD_SHRED_MCAST_FEC_SHRED_CNT=32,
+   max shred idx is 32767, so max fec_idx = 32767/32 = 1023, → 1024 FEC sets).
+   One bit per FEC set → 128 bytes for the bitset. */
+#define FD_SHRED_MCAST_SEEN_FEC_SETS  (1024UL)
+#define FD_SHRED_MCAST_SEEN_FEC_BYTES (FD_SHRED_MCAST_SEEN_FEC_SETS / 8UL) /* 128 */
+
+/* Input link kinds */
+#define IN_KIND_SHRED (0)
+#define IN_KIND_STAKE (1)
 
 /* Race tracking: which source delivered each shred first?
    Sources: 0..FD_SHRED_MCAST_SRC_MAX-1 = mcast sockets; FD_SHRED_MCAST_SRC_MAX = turbine. */
@@ -47,14 +65,21 @@ typedef struct {
   /* Per-slot deduplication bitsets.  Indexed by slot % DEDUP_SLOT_CNT.
      data_seen[i] tracks which data shreds have been forwarded for
      slot dedup[i].slot, and code_seen[i] does the same for coding
-     shreds.  A slot value of ULONG_MAX means the entry is unused. */
+     shreds.  A slot value of ULONG_MAX means the entry is unused.
+     fec_ok/fec_bad track per-FEC-set signature verification results
+     so we only call ed25519_verify once per FEC set (index = fec_set_idx/32). */
   struct {
     ulong slot;
-    uchar data_seen[ FD_SHRED_MCAST_SEEN_BYTES ];
-    uchar code_seen[ FD_SHRED_MCAST_SEEN_BYTES ];
+    uchar data_seen[ FD_SHRED_MCAST_SEEN_BYTES     ];
+    uchar code_seen[ FD_SHRED_MCAST_SEEN_BYTES     ];
+    uchar fec_ok   [ FD_SHRED_MCAST_SEEN_FEC_BYTES ]; /* sig verified OK */
+    uchar fec_bad  [ FD_SHRED_MCAST_SEEN_FEC_BYTES ]; /* sig verified BAD */
   } dedup[ FD_SHRED_MCAST_DEDUP_SLOT_CNT ];
 
-  /* Input link workspaces — one entry per upstream shred_mcast link (shred → shred_mcast) */
+  /* Input link kinds (IN_KIND_SHRED or IN_KIND_STAKE) */
+  int in_kind[ FD_TOPO_MAX_TILE_IN_LINKS ];
+
+  /* Input link workspaces — one entry per upstream link */
   struct {
     fd_wksp_t * mem;
     ulong       chunk0;
@@ -94,6 +119,7 @@ typedef struct {
     ulong tx_relay_bytes;
     ulong dedup_skipped;
     ulong parse_failed;
+    ulong sig_failed;
     ulong rx_src_shreds      [ FD_SHRED_MCAST_SRC_MAX ];
     ulong rx_src_bytes       [ FD_SHRED_MCAST_SRC_MAX ];
     ulong rx_src_dedup       [ FD_SHRED_MCAST_SRC_MAX ];
@@ -129,6 +155,13 @@ typedef struct {
     ulong      solo  [ FD_SHRED_RACE_SRC_CNT ];
     fd_histf_t delay [ FD_SHRED_RACE_SRC_CNT ];
   } race_metrics;
+
+  /* Signature verification support.
+     stake_ci provides leader schedule lookups (updated via replay_stake link).
+     sha512 and bmtree_mem are scratch workspaces for ed25519 + Merkle root computation. */
+  fd_stake_ci_t * stake_ci;
+  fd_sha512_t   * sha512;
+  void          * bmtree_mem;
 } fd_shred_mcast_ctx_t;
 
 /* Finalize race stats for the given ring slot before eviction.
@@ -223,8 +256,10 @@ dedup_check_and_set( fd_shred_mcast_ctx_t * ctx,
   if( FD_UNLIKELY( ctx->dedup[ ring_idx ].slot != slot ) ) {
     /* This ring slot belongs to a different (older) slot — evict it. */
     ctx->dedup[ ring_idx ].slot = slot;
-    fd_memset( ctx->dedup[ ring_idx ].data_seen, 0, FD_SHRED_MCAST_SEEN_BYTES );
-    fd_memset( ctx->dedup[ ring_idx ].code_seen, 0, FD_SHRED_MCAST_SEEN_BYTES );
+    fd_memset( ctx->dedup[ ring_idx ].data_seen, 0, FD_SHRED_MCAST_SEEN_BYTES     );
+    fd_memset( ctx->dedup[ ring_idx ].code_seen, 0, FD_SHRED_MCAST_SEEN_BYTES     );
+    fd_memset( ctx->dedup[ ring_idx ].fec_ok,    0, FD_SHRED_MCAST_SEEN_FEC_BYTES );
+    fd_memset( ctx->dedup[ ring_idx ].fec_bad,   0, FD_SHRED_MCAST_SEEN_FEC_BYTES );
   }
 
   if( FD_UNLIKELY( global_idx >= FD_SHRED_MCAST_MAX_SHREDS_PER_HALF ) ) {
@@ -250,7 +285,10 @@ scratch_align( void ) {
 FD_FN_PURE static inline ulong
 scratch_footprint( fd_topo_tile_t const * tile FD_PARAM_UNUSED ) {
   ulong l = FD_LAYOUT_INIT;
-  l = FD_LAYOUT_APPEND( l, alignof( fd_shred_mcast_ctx_t ), sizeof( fd_shred_mcast_ctx_t ) );
+  l = FD_LAYOUT_APPEND( l, alignof( fd_shred_mcast_ctx_t ),   sizeof( fd_shred_mcast_ctx_t )                          );
+  l = FD_LAYOUT_APPEND( l, fd_stake_ci_align(),                fd_stake_ci_footprint()                                 );
+  l = FD_LAYOUT_APPEND( l, alignof( fd_sha512_t ),             sizeof( fd_sha512_t )                                   );
+  l = FD_LAYOUT_APPEND( l, fd_bmtree_commit_align(),           fd_bmtree_commit_footprint( FD_SHRED_MERKLE_LAYER_CNT ) );
   return FD_LAYOUT_FINI( l, scratch_align() );
 }
 
@@ -358,10 +396,20 @@ unprivileged_init( fd_topo_t *      topo,
                     fd_topo_tile_t * tile ) {
   void * scratch = fd_topo_obj_laddr( topo, tile->tile_obj_id );
   FD_SCRATCH_ALLOC_INIT( l, scratch );
-  fd_shred_mcast_ctx_t * ctx = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_shred_mcast_ctx_t), sizeof(fd_shred_mcast_ctx_t) );
+  fd_shred_mcast_ctx_t * ctx       = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_shred_mcast_ctx_t),   sizeof(fd_shred_mcast_ctx_t)                          );
+  void                 * _stake_ci = FD_SCRATCH_ALLOC_APPEND( l, fd_stake_ci_align(),               fd_stake_ci_footprint()                                );
+  void                 * _sha512   = FD_SCRATCH_ALLOC_APPEND( l, alignof(fd_sha512_t),              sizeof(fd_sha512_t)                                    );
+  void                 * _bmtree   = FD_SCRATCH_ALLOC_APPEND( l, fd_bmtree_commit_align(),          fd_bmtree_commit_footprint( FD_SHRED_MERKLE_LAYER_CNT ) );
   FD_SCRATCH_ALLOC_FINI( l, scratch_align() );
 
   fd_memset( ctx, 0, sizeof(*ctx) );
+
+  /* Initialize stake_ci with a null identity (smcast only needs leader schedule, not sdest routing) */
+  fd_pubkey_t null_identity[1];
+  fd_memset( null_identity, 0, sizeof(fd_pubkey_t) );
+  ctx->stake_ci   = fd_stake_ci_join( fd_stake_ci_new( _stake_ci, null_identity ) );
+  ctx->sha512     = fd_sha512_join( fd_sha512_new( _sha512 ) );
+  ctx->bmtree_mem = _bmtree;
 
   /* Mark all dedup slots as unused */
   for( ulong i=0UL; i<FD_SHRED_MCAST_DEDUP_SLOT_CNT; i++ )
@@ -382,9 +430,10 @@ unprivileged_init( fd_topo_t *      topo,
                                  FD_MHIST_MAX( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_NANOS ) ) );
   }
 
-  /* Set up input link workspaces (shred → shred_mcast) */
+  /* Set up input link workspaces */
   for( ulong i=0UL; i<tile->in_cnt; i++ ) {
     fd_topo_link_t * link = &topo->links[ tile->in_link_id[ i ] ];
+    ctx->in_kind[ i ] = !strcmp( link->name, "replay_stake" ) ? IN_KIND_STAKE : IN_KIND_SHRED;
     fd_topo_wksp_t * wksp = &topo->workspaces[ topo->objs[ link->dcache_obj_id ].wksp_id ];
     ctx->in[ i ].mem    = wksp->wksp;
     ctx->in[ i ].chunk0 = fd_dcache_compact_chunk0( ctx->in[ i ].mem, link->dcache );
@@ -422,9 +471,60 @@ unprivileged_init( fd_topo_t *      topo,
                   tile->in_cnt, ctx->mcast_rx_cnt, ctx->mcast_dst_cnt, ctx->mcast_tx_sock ));
 }
 
+/* fec_sigcheck: verify the leader Ed25519 signature for a shred received
+   from an external multicast source.  Only called for the first shred of
+   each FEC set (subsequent shreds reuse the cached fec_ok/fec_bad result).
+
+   Returns 1 if the signature is valid (or if no epoch data is available,
+   which is treated as relay mode and lets the shred pass through).
+   Returns 0 if the signature is provably invalid. */
+static inline int
+fec_sigcheck( fd_shred_mcast_ctx_t * ctx,
+              fd_shred_t const     * shred ) {
+  /* No epoch data → relay mode, skip verification */
+  fd_epoch_leaders_t const * lsched = fd_stake_ci_get_lsched_for_slot( ctx->stake_ci, shred->slot );
+  if( FD_UNLIKELY( !lsched ) ) return 1;
+  fd_pubkey_t const * leader = fd_epoch_leaders_get( lsched, shred->slot );
+  if( FD_UNLIKELY( !leader ) ) return 1;
+
+  uchar shred_type = fd_shred_type( shred->variant );
+  /* Reject legacy shreds: they have no Merkle proof */
+  if( FD_UNLIKELY( (shred_type==FD_SHRED_TYPE_LEGACY_DATA) |
+                   (shred_type==FD_SHRED_TYPE_LEGACY_CODE) ) ) return 0;
+  ulong tree_depth = fd_shred_merkle_cnt( shred->variant );
+  if( FD_UNLIKELY( tree_depth!=6UL ) ) return 0; /* all live shreds use depth 6 */
+
+  int   is_data     = fd_shred_is_data( shred_type );
+  ulong in_type_idx = fd_ulong_if( is_data, shred->idx - shred->fec_set_idx, shred->code.idx );
+  if( FD_UNLIKELY( in_type_idx >= fd_ulong_if( is_data, FD_REEDSOL_DATA_SHREDS_MAX, FD_REEDSOL_PARITY_SHREDS_MAX ) ) ) return 0;
+  ulong shred_idx = fd_ulong_if( is_data, in_type_idx, in_type_idx + shred->code.data_cnt );
+
+  /* Compute Merkle-protected sizes (mirrors fd_fec_resolver.c) */
+  ulong rsp = 1115UL + FD_SHRED_DATA_HEADER_SZ - FD_SHRED_SIGNATURE_SZ
+            - FD_SHRED_MERKLE_NODE_SZ * tree_depth
+            - FD_SHRED_MERKLE_ROOT_SZ * fd_shred_is_chained ( shred_type )
+            - FD_SHRED_SIGNATURE_SZ   * fd_shred_is_resigned( shred_type );
+  ulong merkle_protected_sz = fd_ulong_if( is_data,
+      rsp + FD_SHRED_MERKLE_ROOT_SZ * fd_shred_is_chained( shred_type ),
+      rsp + FD_SHRED_MERKLE_ROOT_SZ * fd_shred_is_chained( shred_type ) + FD_SHRED_CODE_HEADER_SZ - FD_ED25519_SIG_SZ );
+
+  fd_bmtree_node_t leaf[1];
+  fd_bmtree_hash_leaf( leaf, (uchar const *)shred + sizeof(fd_ed25519_sig_t),
+                       merkle_protected_sz, FD_BMTREE_LONG_PREFIX_SZ );
+
+  fd_bmtree_commit_t * tree = fd_bmtree_commit_init( ctx->bmtree_mem,
+      FD_SHRED_MERKLE_NODE_SZ, FD_BMTREE_LONG_PREFIX_SZ, FD_SHRED_MERKLE_LAYER_CNT );
+  fd_bmtree_node_t          root[1];
+  fd_shred_merkle_t const * proof = fd_shred_merkle_nodes( shred );
+  if( FD_UNLIKELY( !fd_bmtree_commitp_insert_with_proof( tree, shred_idx, leaf,
+                                                          (uchar const *)proof, tree_depth, root ) ) ) return 0;
+
+  return fd_ed25519_verify( root->hash, 32UL, shred->signature, leader->uc, ctx->sha512 ) == FD_ED25519_SUCCESS;
+}
+
 /* before_credit: poll the multicast RX socket for incoming shreds from
    the external multicast feed.  Uses MSG_DONTWAIT to avoid blocking.
-   For each new shred, deduplicates and forwards to the TX socket. */
+   For each new shred, deduplicates, signature-verifies, and forwards. */
 static void
 before_credit( fd_shred_mcast_ctx_t * ctx,
                fd_stem_context_t *    stem,
@@ -497,6 +597,29 @@ before_credit( fd_shred_mcast_ctx_t * ctx,
         continue;
       }
 
+      /* Per-FEC-set signature verification.  All shreds in the same FEC set
+         share the same leader signature, so we verify once and cache the result. */
+      ulong fec_idx = (ulong)shred->fec_set_idx / FD_SHRED_MCAST_FEC_SHRED_CNT;
+      if( FD_LIKELY( fec_idx < FD_SHRED_MCAST_SEEN_FEC_SETS ) ) {
+        ulong ring_idx = shred->slot % FD_SHRED_MCAST_DEDUP_SLOT_CNT;
+        ulong word     = fec_idx >> 3;
+        uchar bit      = (uchar)(1U << (fec_idx & 7U));
+        if( FD_UNLIKELY( ctx->dedup[ ring_idx ].fec_bad[ word ] & bit ) ) {
+          /* FEC set already known bad — drop without re-verifying */
+          ctx->metrics.sig_failed++;
+          continue;
+        }
+        if( !( ctx->dedup[ ring_idx ].fec_ok[ word ] & bit ) ) {
+          /* First shred of this FEC set: must verify */
+          if( FD_UNLIKELY( !fec_sigcheck( ctx, shred ) ) ) {
+            ctx->dedup[ ring_idx ].fec_bad[ word ] |= bit;
+            ctx->metrics.sig_failed++;
+            continue;
+          }
+          ctx->dedup[ ring_idx ].fec_ok[ word ] |= bit;
+        }
+      }
+
       for( ulong d=0UL; d<ctx->mcast_dst_cnt; d++ ) {
         (void)sendto( ctx->mcast_tx_sock, raw, raw_sz, 0,
                       fd_type_pun_const( &ctx->mcast_dst_addrs[ d ] ),
@@ -530,7 +653,8 @@ before_credit( fd_shred_mcast_ctx_t * ctx,
 
 /* during_frag: copy raw shred bytes from the dcache into a local buffer.
    The sig carries slot/fec_set_idx/is_code/shred_idx encoded by the
-   shred tile via fd_disco_shred_out_shred_sig(). */
+   shred tile via fd_disco_shred_out_shred_sig().
+   For stake messages, initialize the stake_ci update (finalized in after_frag). */
 static inline void
 during_frag( fd_shred_mcast_ctx_t * ctx,
               ulong                  in_idx,
@@ -540,6 +664,14 @@ during_frag( fd_shred_mcast_ctx_t * ctx,
               ulong                  sz,
               ulong                  ctl    FD_PARAM_UNUSED ) {
   ctx->skip_frag = 0;
+  if( FD_UNLIKELY( ctx->in_kind[ in_idx ]==IN_KIND_STAKE ) ) {
+    if( FD_UNLIKELY( chunk<ctx->in[ in_idx ].chunk0 || chunk>ctx->in[ in_idx ].wmark ) )
+      FD_LOG_ERR(( "smcast: corrupt stake chunk %lu not in [%lu,%lu]", chunk, ctx->in[ in_idx ].chunk0, ctx->in[ in_idx ].wmark ));
+    uchar const * dcache_entry = fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk );
+    fd_stake_ci_stake_msg_init( ctx->stake_ci, fd_type_pun_const( dcache_entry ) );
+    ctx->skip_frag = 2; /* sentinel: finalize stake in after_frag */
+    return;
+  }
   if( FD_UNLIKELY( sz > FD_SHRED_MAX_SZ ) ) { ctx->skip_frag = 1; return; }
   uchar const * src = fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk );
   fd_memcpy( ctx->pkt_buf, src, sz );
@@ -552,13 +684,19 @@ during_frag( fd_shred_mcast_ctx_t * ctx,
    regardless of which source delivered first. */
 static inline void
 after_frag( fd_shred_mcast_ctx_t * ctx,
-             ulong                  in_idx  FD_PARAM_UNUSED,
+             ulong                  in_idx,
              ulong                  seq     FD_PARAM_UNUSED,
              ulong                  sig     FD_PARAM_UNUSED,
              ulong                  sz      FD_PARAM_UNUSED,
              ulong                  tsorig  FD_PARAM_UNUSED,
              ulong                  tspub   FD_PARAM_UNUSED,
              fd_stem_context_t *    stem ) {
+  if( FD_UNLIKELY( ctx->skip_frag==2 ) ) {
+    /* Stake message: finalize the update started in during_frag */
+    fd_stake_ci_stake_msg_fini( ctx->stake_ci );
+    (void)in_idx;
+    return;
+  }
   if( FD_UNLIKELY( ctx->skip_frag ) ) return;
 
   fd_shred_t const * shred = fd_shred_parse( ctx->pkt_buf, ctx->pkt_sz );
@@ -611,7 +749,8 @@ metrics_write( fd_shred_mcast_ctx_t * ctx ) {
   FD_MCNT_SET( SHRED_MCAST, TX_MCAST_BYTES,    ctx->metrics.tx_mcast_bytes  );
   FD_MCNT_SET( SHRED_MCAST, TX_RELAY_BYTES,    ctx->metrics.tx_relay_bytes  );
   FD_MCNT_SET( SHRED_MCAST, DEDUP_SKIPPED,     ctx->metrics.dedup_skipped   );
-  FD_MCNT_SET( SHRED_MCAST, PARSE_FAILED,      ctx->metrics.parse_failed  );
+  FD_MCNT_SET( SHRED_MCAST, PARSE_FAILED,      ctx->metrics.parse_failed    );
+  FD_MCNT_SET( SHRED_MCAST, SIG_FAILED,        ctx->metrics.sig_failed      );
   for( ulong i=0UL; i<FD_SHRED_MCAST_SRC_MAX; i++ ) {
     fd_metrics_tl[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SHREDS_OFF + 2UL*i     ] = ctx->metrics.rx_src_shreds[ i ];
     fd_metrics_tl[ FD_METRICS_COUNTER_SHRED_MCAST_RX_MCAST_SRC0_SHREDS_OFF + 2UL*i+1UL ] = ctx->metrics.rx_src_bytes [ i ];

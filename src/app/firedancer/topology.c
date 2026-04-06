@@ -862,6 +862,9 @@ fd_topo_initialize( config_t * config ) {
 
     FOR(shred_tile_cnt) fd_topob_tile_out( topo, "smcast",  0UL, "mcast_shred", i );
     FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "shred",       i,   "metric_in", "mcast_shred", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+
+    /* Stake weight updates: smcast needs leader schedule for shred signature verification */
+    fd_topob_tile_in( topo, "smcast", 0UL, "metric_in", "replay_stake", 0UL, FD_TOPOB_RELIABLE, FD_TOPOB_POLLED );
   }
 
   if( FD_LIKELY( !relay ) ) {

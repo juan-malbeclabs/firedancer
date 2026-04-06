@@ -712,6 +712,29 @@ after_frag( fd_shred_mcast_ctx_t * ctx,
     return;
   }
 
+  /* Per-FEC-set signature verification — same logic as before_credit.
+     Shreds from the shred tile may not have been leader-verified if the
+     shred tile lacked stake weights (relay mode), so smcast is the
+     authoritative verifier for all paths. */
+  ulong fec_idx_t = (ulong)shred->fec_set_idx / FD_SHRED_MCAST_FEC_SHRED_CNT;
+  if( FD_LIKELY( fec_idx_t < FD_SHRED_MCAST_SEEN_FEC_SETS ) ) {
+    ulong ring_idx = shred->slot % FD_SHRED_MCAST_DEDUP_SLOT_CNT;
+    ulong word     = fec_idx_t >> 3;
+    uchar bit      = (uchar)(1U << (fec_idx_t & 7U));
+    if( FD_UNLIKELY( ctx->dedup[ ring_idx ].fec_bad[ word ] & bit ) ) {
+      ctx->metrics.sig_failed++;
+      return;
+    }
+    if( !( ctx->dedup[ ring_idx ].fec_ok[ word ] & bit ) ) {
+      if( FD_UNLIKELY( !fec_sigcheck( ctx, shred ) ) ) {
+        ctx->dedup[ ring_idx ].fec_bad[ word ] |= bit;
+        ctx->metrics.sig_failed++;
+        return;
+      }
+      ctx->dedup[ ring_idx ].fec_ok[ word ] |= bit;
+    }
+  }
+
   /* Turbine won the race — forward to mcast destinations */
   for( ulong d=0UL; d<ctx->mcast_dst_cnt; d++ ) {
     (void)sendto( ctx->mcast_tx_sock, ctx->pkt_buf, ctx->pkt_sz, 0,

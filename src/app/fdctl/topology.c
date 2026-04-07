@@ -11,6 +11,9 @@
 #include "../../util/net/fd_ip4.h"
 #include "../../util/tile/fd_tile_private.h"
 #include "../../discof/gossip/fd_gossip_tile.h"
+#include "../../discof/restore/fd_snapct_tile.h"
+#include "../../discof/restore/utils/fd_ssctrl.h"
+#include "../../discof/restore/utils/fd_ssmsg.h"
 
 #include <netdb.h>
 #include <netinet/in.h>
@@ -120,6 +123,12 @@ fd_topo_initialize( config_t * config ) {
      FEC set memory (required by Frankendancer shred tile). */
   int relay = !strcmp( config->layout.mode, "shred_relay" );
 
+  /* In relay mode, a discof snapshot pipeline (snapct/snapld/snapdc/snapin)
+     downloads and parses a snapshot to obtain epoch stake weights, which are
+     forwarded via replay_stake to the smcast tile for leader sig verification.
+     This requires gossip entrypoints so snapshot peers can be discovered. */
+  int snapshots_enabled = relay && !!config->gossip.entrypoints_cnt;
+
   /* In relay mode, add Firedancer gossip tiles (gossip, gossvf, ipecho)
      so the network knows this validator's TVU port and can send shreds. */
   ulong gossvf_tile_cnt = FD_UNLIKELY( relay ) ? 1UL : 0UL;
@@ -163,6 +172,19 @@ fd_topo_initialize( config_t * config ) {
     fd_topob_wksp( topo, "gossip_out"   );
     fd_topob_wksp( topo, "gossip_sign"  );
     fd_topob_wksp( topo, "sign_gossip"  );
+  }
+  if( FD_UNLIKELY( snapshots_enabled ) ) {
+    fd_topob_wksp( topo, "snapct"       );
+    fd_topob_wksp( topo, "snapld"       );
+    fd_topob_wksp( topo, "snapdc"       );
+    fd_topob_wksp( topo, "snapin"       );
+    fd_topob_wksp( topo, "replay_stake" );
+    fd_topob_wksp( topo, "snapct_ld"    );
+    fd_topob_wksp( topo, "snapld_dc"    );
+    fd_topob_wksp( topo, "snapdc_in"    );
+    fd_topob_wksp( topo, "snapin_ct"    );
+    fd_topob_wksp( topo, "snapin_manif" );
+    fd_topob_wksp( topo, "snapct_repr"  );
   }
 
   if( FD_LIKELY( !relay ) ) fd_topob_wksp( topo, "quic"    );
@@ -220,6 +242,19 @@ fd_topo_initialize( config_t * config ) {
     /**/                 fd_topob_link( topo, "gossip_sign",  "gossip_sign",  128UL,                                    2048UL,                              1UL );
     /**/                 fd_topob_link( topo, "sign_gossip",  "sign_gossip",  128UL,                                    sizeof(fd_ed25519_sig_t),            1UL );
   }
+  if( FD_UNLIKELY( snapshots_enabled ) ) {
+    /* Snapshot pipeline: downloads and parses a snapshot to extract epoch
+       stake weights for smcast leader signature verification.
+       In relay mode, Agave starts from genesis so we need this discof
+       pipeline as the only source of stake data.                         */
+    /**/               fd_topob_link( topo, "snapct_ld",    "snapct_ld",    128UL,                                    sizeof(fd_ssctrl_init_t),      1UL );
+    /**/               fd_topob_link( topo, "snapld_dc",    "snapld_dc",    16384UL,                                  USHORT_MAX,                    1UL );
+    /**/               fd_topob_link( topo, "snapdc_in",    "snapdc_in",    16384UL,                                  USHORT_MAX,                    1UL );
+    /**/               fd_topob_link( topo, "snapin_ct",    "snapin_ct",    128UL,                                    0UL,                           1UL );
+    /**/               fd_topob_link( topo, "snapin_manif", "snapin_manif", 2UL,                                      sizeof(fd_snapshot_manifest_t),1UL )->permit_no_consumers = 1; /* relay: no replay/repair consumer */
+    /**/               fd_topob_link( topo, "snapct_repr",  "snapct_repr",  128UL,                                    0UL,                           1UL )->permit_no_consumers = 1;
+    /**/               fd_topob_link( topo, "replay_stake", "replay_stake", 128UL,                                    FD_STAKE_OUT_MTU,              1UL ); /* snapin → smcast/shred: epoch stake weights */
+  }
 
   ushort parsed_tile_to_cpu[ FD_TILE_MAX ];
   /* Unassigned tiles will be floating, unless auto topology is enabled. */
@@ -269,6 +304,14 @@ fd_topo_initialize( config_t * config ) {
     /**/               fd_topob_tile( topo, "ipecho",  "ipecho",  "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0,        0 );
     FOR(gossvf_tile_cnt) fd_topob_tile( topo, "gossvf", "gossvf", "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0,        1 );
     /**/               fd_topob_tile( topo, "gossip",  "gossip",  "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0,        1 );
+  }
+  if( FD_UNLIKELY( snapshots_enabled ) ) {
+    /* Snapshot pipeline tiles: download and parse a snapshot to extract
+       epoch stake weights for smcast leader sig verification in relay mode. */
+    /**/               fd_topob_tile( topo, "snapct", "snapct", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 )->allow_shutdown = 1;
+    /**/               fd_topob_tile( topo, "snapld", "snapld", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 )->allow_shutdown = 1;
+    /**/               fd_topob_tile( topo, "snapdc", "snapdc", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 )->allow_shutdown = 1;
+    /**/               fd_topob_tile( topo, "snapin", "snapin", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0 )->allow_shutdown = 1;
   }
   /**/                 fd_topob_tile( topo, "metric",  "metric",  "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0,        0 );
   /**/                 fd_topob_tile( topo, "cswtch",  "cswtch",  "metric_in",  tile_to_cpu[ topo->tile_cnt ], 0,        0 );
@@ -393,6 +436,38 @@ fd_topo_initialize( config_t * config ) {
 
     /* shred tile: receives contact info from gossip so it can compute turbine children for retransmit */
     FOR(shred_tile_cnt)  fd_topob_tile_in(    topo, "shred",  i,            "metric_in", "gossip_out",   0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+
+    /* shred tile: receives epoch stake weights from snapin for leader schedule lookups */
+    if( FD_UNLIKELY( snapshots_enabled ) )
+      FOR(shred_tile_cnt) fd_topob_tile_in(   topo, "shred",  i,            "metric_in", "replay_stake", 0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+  }
+
+  if( FD_UNLIKELY( snapshots_enabled ) ) {
+    int snapshots_gossip_enabled = config->firedancer.snapshots.sources.gossip.allow_any ||
+                                   config->firedancer.snapshots.sources.gossip.allow_list_cnt > 0UL;
+
+    /* snapct: receives snapshot peer updates from gossip, progress from snapin and snapld */
+    if( FD_LIKELY( snapshots_gossip_enabled ) )
+      /**/              fd_topob_tile_in(     topo, "snapct",  0UL,          "metric_in", "gossip_out",   0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+    /**/                fd_topob_tile_in(     topo, "snapct",  0UL,          "metric_in", "snapin_ct",    0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+    /**/                fd_topob_tile_in(     topo, "snapct",  0UL,          "metric_in", "snapld_dc",    0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+    /**/                fd_topob_tile_out(    topo, "snapct",  0UL,                       "snapct_ld",    0UL                                                );
+    /**/                fd_topob_tile_out(    topo, "snapct",  0UL,                       "snapct_repr",  0UL                                                );
+
+    /* snapld: receives download instructions from snapct, sends raw chunks to snapdc */
+    /**/                fd_topob_tile_in(     topo, "snapld",  0UL,          "metric_in", "snapct_ld",    0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+    /**/                fd_topob_tile_out(    topo, "snapld",  0UL,                       "snapld_dc",    0UL                                                );
+
+    /* snapdc: receives compressed chunks from snapld, sends decompressed chunks to snapin */
+    /**/                fd_topob_tile_in(     topo, "snapdc",  0UL,          "metric_in", "snapld_dc",    0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+    /**/                fd_topob_tile_out(    topo, "snapdc",  0UL,                       "snapdc_in",    0UL                                                );
+
+    /* snapin: parses snapshot; publishes epoch stakes on replay_stake for smcast sig verification */
+    /**/                fd_topob_tile_in(     topo, "snapin",  0UL,          "metric_in", "snapdc_in",    0UL,          FD_TOPOB_RELIABLE,   FD_TOPOB_POLLED );
+    /**/                fd_topob_tile_out(    topo, "snapin",  0UL,                       "snapin_ct",    0UL                                                );
+    /**/                fd_topob_tile_out(    topo, "snapin",  0UL,                       "snapin_manif", 0UL                                                );
+    /* relay mode: publish epoch stake weights to smcast and shred for leader sig verification */
+    /**/                fd_topob_tile_out(    topo, "snapin",  0UL,                       "replay_stake", 0UL                                                );
   }
 
   /* For now the only plugin consumer is the GUI */
@@ -509,6 +584,10 @@ fd_topo_initialize( config_t * config ) {
 
     FOR(shred_tile_cnt) fd_topob_tile_out( topo, "smcast", 0UL, "mcast_shred", i );
     FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "shred",       i,   "metric_in", "mcast_shred", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+
+    /* Stake weight updates: smcast needs leader schedule for shred signature verification */
+    if( FD_UNLIKELY( snapshots_enabled ) )
+      fd_topob_tile_in( topo, "smcast", 0UL, "metric_in", "replay_stake", 0UL, FD_TOPOB_RELIABLE, FD_TOPOB_POLLED );
   }
 
   if( FD_LIKELY( !is_auto_affinity ) ) {

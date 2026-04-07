@@ -36,6 +36,7 @@ struct fd_snapin_tile {
   int  state;
   uint full      : 1; /* loading a full snapshot? */
   uint use_vinyl : 1; /* using vinyl-backed accdb? */
+  uint no_funk   : 1; /* relay mode: no funk/accdb, only parse manifest for epoch stakes */
 
   ulong seed;
   long boot_timestamp;
@@ -261,9 +262,11 @@ fd_snapin_process_account_batch( fd_snapin_tile_t *            ctx,
                                  fd_ssparse_advance_result_t * result ) {
   if( ctx->use_vinyl ) {
     fd_snapin_process_account_batch_vinyl( ctx, result );
-  } else {
+  } else if( FD_LIKELY( ctx->accdb_admin ) ) {
     fd_snapin_process_account_batch_funk( ctx, result );
   }
+  /* else: relay mode (accdb_admin==NULL) — skip account writes;
+     only the snapshot manifest is needed for epoch stake extraction. */
 }
 
 static inline void

@@ -626,7 +626,7 @@ handle_control_frag( fd_snapin_tile_t *  ctx,
         if( ctx->vinyl.txn_active ) {
           fd_snapin_vinyl_txn_cancel( ctx );
         }
-      } else {
+      } else if( FD_LIKELY( !ctx->no_funk ) ) {
         if( ctx->full ) {
           fd_accdb_clear( ctx->accdb_admin );
         } else {
@@ -654,8 +654,10 @@ handle_control_frag( fd_snapin_tile_t *  ctx,
       }
 
       fd_funk_txn_xid_t incremental_xid = { .ul={ LONG_MAX, LONG_MAX } };
-      fd_accdb_attach_child( ctx->accdb_admin, ctx->xid, &incremental_xid );
-      fd_funk_txn_xid_copy( ctx->xid, &incremental_xid );
+      if( FD_LIKELY( !ctx->no_funk ) ) {
+        fd_accdb_attach_child( ctx->accdb_admin, ctx->xid, &incremental_xid );
+        fd_funk_txn_xid_copy( ctx->xid, &incremental_xid );
+      }
       break;
     }
 
@@ -682,17 +684,19 @@ handle_control_frag( fd_snapin_tile_t *  ctx,
         break;
       }
 
-      /* Publish any remaining funk txn */
-      if( FD_LIKELY( fd_funk_last_publish_is_frozen( ctx->accdb_admin->funk ) ) ) {
-        fd_accdb_advance_root( ctx->accdb_admin, ctx->xid );
-      }
-      FD_TEST( !fd_funk_last_publish_is_frozen( ctx->accdb_admin->funk ) );
+      if( FD_LIKELY( !ctx->no_funk ) ) {
+        /* Publish any remaining funk txn */
+        if( FD_LIKELY( fd_funk_last_publish_is_frozen( ctx->accdb_admin->funk ) ) ) {
+          fd_accdb_advance_root( ctx->accdb_admin, ctx->xid );
+        }
+        FD_TEST( !fd_funk_last_publish_is_frozen( ctx->accdb_admin->funk ) );
 
-      /* Make 'Last published' XID equal the restored slot number */
-      fd_funk_txn_xid_t target_xid = { .ul = { ctx->bank_slot, 0UL } };
-      fd_accdb_attach_child( ctx->accdb_admin, ctx->xid, &target_xid );
-      fd_accdb_advance_root( ctx->accdb_admin,           &target_xid );
-      fd_funk_txn_xid_copy( ctx->xid, &target_xid );
+        /* Make 'Last published' XID equal the restored slot number */
+        fd_funk_txn_xid_t target_xid = { .ul = { ctx->bank_slot, 0UL } };
+        fd_accdb_attach_child( ctx->accdb_admin, ctx->xid, &target_xid );
+        fd_accdb_advance_root( ctx->accdb_admin,           &target_xid );
+        fd_funk_txn_xid_copy( ctx->xid, &target_xid );
+      }
 
       fd_stem_publish( stem, ctx->manifest_out.idx, fd_ssmsg_sig( FD_SSMSG_DONE ), 0UL, 0UL, 0UL, 0UL, 0UL );
       break;
@@ -830,8 +834,16 @@ unprivileged_init( fd_topo_t *      topo,
 
   ctx->boot_timestamp = fd_log_wallclock();
 
-  FD_TEST( fd_accdb_admin_join( ctx->accdb_admin, fd_topo_obj_laddr( topo, tile->snapin.funk_obj_id ) ) );
-  fd_funk_txn_xid_copy( ctx->xid, fd_funk_root( ctx->accdb_admin->funk ) );
+  if( FD_LIKELY( tile->snapin.funk_obj_id!=ULONG_MAX ) ) {
+    /* Full validator: join funk to track account writes from snapshot. */
+    FD_TEST( fd_accdb_admin_join( ctx->accdb_admin, fd_topo_obj_laddr( topo, tile->snapin.funk_obj_id ) ) );
+    fd_funk_txn_xid_copy( ctx->xid, fd_funk_root( ctx->accdb_admin->funk ) );
+  } else {
+    /* Relay mode (fdctl): no funk needed — snapin only parses the snapshot
+       manifest to extract epoch stake weights for smcast sig verification.
+       All account-write paths are guarded by ctx->no_funk. */
+    ctx->no_funk = 1;
+  }
 
   if( FD_LIKELY( tile->snapin.txncache_obj_id!=ULONG_MAX ) ) {
     void * _txncache_shmem = fd_topo_obj_laddr( topo, tile->snapin.txncache_obj_id );

@@ -443,8 +443,9 @@ fd_topo_initialize( config_t * config ) {
   }
 
   if( FD_UNLIKELY( snapshots_enabled ) ) {
-    int snapshots_gossip_enabled = config->firedancer.snapshots.sources.gossip.allow_any ||
-                                   config->firedancer.snapshots.sources.gossip.allow_list_cnt > 0UL;
+    int snapshots_gossip_enabled = relay ? 1 :
+                                   ( config->firedancer.snapshots.sources.gossip.allow_any ||
+                                     config->firedancer.snapshots.sources.gossip.allow_list_cnt > 0UL );
 
     /* snapct: receives snapshot peer updates from gossip, progress from snapin and snapld */
     if( FD_LIKELY( snapshots_gossip_enabled ) )
@@ -900,6 +901,24 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     tile->gossip.entrypoints_cnt           = config->gossip.entrypoints_cnt;
     fd_memcpy( tile->gossip.entrypoints, config->gossip.resolved_entrypoints, tile->gossip.entrypoints_cnt * sizeof(fd_ip4_port_t) );
     tile->gossip.restrict_to_entrypoints   = 0; /* Must gossip with full cluster so our TVU is known and shreds are delivered */
+
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "snapct" ) ) ) {
+
+    fd_memcpy( tile->snapct.snapshots_path, config->paths.snapshots, PATH_MAX );
+    tile->snapct.sources.gossip.allow_any = 1; /* relay mode: accept any gossip peer */
+
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "snapld" ) ) ) {
+
+    fd_memcpy( tile->snapld.snapshots_path, config->paths.snapshots, PATH_MAX );
+
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "snapdc" ) ) ) {
+
+    /* no additional config needed */
+
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "snapin" ) ) ) {
+
+    tile->snapin.funk_obj_id     = ULONG_MAX; /* no funk in relay mode */
+    tile->snapin.txncache_obj_id = ULONG_MAX; /* no txncache in relay mode */
 
   } else {
     FD_LOG_ERR(( "unknown tile name %lu `%s`", tile->id, tile->name ));

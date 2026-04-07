@@ -465,16 +465,26 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
       cur->race_solo  [ s ] = sm_met[ base + 3UL ];
     }
 
-    /* Race delay histograms: initialize structure then snapshot bucket counts. */
+    /* Race delay histograms (split by placement): snapshot second and third buckets.
+       Layout: pairs [delay_second, delay_third] per source, stride 2*(FD_HISTF_BUCKET_CNT+1). */
     for( ulong s=0UL; s<FD_SHRED_MCAST_SRC_MAX+1UL; s++ ) {
-      fd_histf_new( &cur->race_delay[ s ],
-                    FD_MHIST_MIN( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_NANOS ),
-                    FD_MHIST_MAX( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_NANOS ) );
-      ulong hist_off = FD_METRICS_HISTOGRAM_SHRED_MCAST_RACE_MCAST_SRC0_DELAY_NANOS_OFF
-                     + s * (FD_HISTF_BUCKET_CNT + 1UL);
-      cur->race_delay[ s ].sum = sm_met[ hist_off + FD_HISTF_BUCKET_CNT ];
+      ulong stride    = FD_HISTF_BUCKET_CNT + 1UL;
+      ulong hist_base = FD_METRICS_HISTOGRAM_SHRED_MCAST_RACE_MCAST_SRC0_DELAY_SECOND_NANOS_OFF
+                      + s * 2UL * stride;
+
+      fd_histf_new( &cur->race_delay_second[ s ],
+                    FD_MHIST_MIN( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_SECOND_NANOS ),
+                    FD_MHIST_MAX( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_SECOND_NANOS ) );
+      cur->race_delay_second[ s ].sum = sm_met[ hist_base + FD_HISTF_BUCKET_CNT ];
       for( ulong b=0UL; b<FD_HISTF_BUCKET_CNT; b++ )
-        cur->race_delay[ s ].counts[ b ] = sm_met[ hist_off + b ];
+        cur->race_delay_second[ s ].counts[ b ] = sm_met[ hist_base + b ];
+
+      fd_histf_new( &cur->race_delay_third[ s ],
+                    FD_MHIST_MIN( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_THIRD_NANOS ),
+                    FD_MHIST_MAX( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_THIRD_NANOS ) );
+      cur->race_delay_third[ s ].sum = sm_met[ hist_base + stride + FD_HISTF_BUCKET_CNT ];
+      for( ulong b=0UL; b<FD_HISTF_BUCKET_CNT; b++ )
+        cur->race_delay_third[ s ].counts[ b ] = sm_met[ hist_base + stride + b ];
     }
   }
 }

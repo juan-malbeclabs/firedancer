@@ -1238,14 +1238,23 @@
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;turbine_&#8203;second</span> | counter | Shreds where the turbine (unicast TVU) path was second to deliver |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;turbine_&#8203;third</span> | counter | Shreds where the turbine (unicast TVU) path arrived third or later |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;turbine_&#8203;solo</span> | counter | Shreds delivered only by the turbine path (no other source delivered within the slot window) |
-| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src0_&#8203;delay_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 0, when not first |
-| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src1_&#8203;delay_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 1, when not first |
-| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src2_&#8203;delay_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 2, when not first |
-| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src3_&#8203;delay_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 3, when not first |
-| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src4_&#8203;delay_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 4, when not first |
-| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src5_&#8203;delay_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 5, when not first |
-| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src6_&#8203;delay_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 6, when not first |
-| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src7_&#8203;delay_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 7, when not first |
-| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;turbine_&#8203;delay_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for the turbine path, when not first |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src0_&#8203;delay_&#8203;second_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 0, when arriving second |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src0_&#8203;delay_&#8203;third_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 0, when arriving third or later |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src1_&#8203;delay_&#8203;second_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 1, when arriving second |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src1_&#8203;delay_&#8203;third_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 1, when arriving third or later |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src2_&#8203;delay_&#8203;second_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 2, when arriving second |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src2_&#8203;delay_&#8203;third_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 2, when arriving third or later |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src3_&#8203;delay_&#8203;second_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 3, when arriving second |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src3_&#8203;delay_&#8203;third_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 3, when arriving third or later |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src4_&#8203;delay_&#8203;second_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 4, when arriving second |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src4_&#8203;delay_&#8203;third_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 4, when arriving third or later |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src5_&#8203;delay_&#8203;second_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 5, when arriving second |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src5_&#8203;delay_&#8203;third_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 5, when arriving third or later |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src6_&#8203;delay_&#8203;second_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 6, when arriving second |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src6_&#8203;delay_&#8203;third_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 6, when arriving third or later |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src7_&#8203;delay_&#8203;second_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 7, when arriving second |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src7_&#8203;delay_&#8203;third_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 7, when arriving third or later |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;turbine_&#8203;delay_&#8203;second_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for the turbine path, when arriving second |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;turbine_&#8203;delay_&#8203;third_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for the turbine path, when arriving third or later |
 
 </div>

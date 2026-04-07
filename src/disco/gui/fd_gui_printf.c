@@ -727,21 +727,21 @@ fd_gui_printf_network_metrics( fd_gui_t *                     gui,
         fd_cstr_printf( label, sizeof(label), NULL, "mcast_%lu", s );
       }
 
-      ulong total   = cur->race_first[s] + cur->race_second[s] + cur->race_third[s];
-      ulong p95_ns  = FD_HISTF_BUCKET_CNT>0UL ? fd_histf_percentile( &cur->race_delay[s], 95U, ULONG_MAX ) : ULONG_MAX;
-      ulong p99_ns  = FD_HISTF_BUCKET_CNT>0UL ? fd_histf_percentile( &cur->race_delay[s], 99U, ULONG_MAX ) : ULONG_MAX;
-      double p95_us = (p95_ns==ULONG_MAX) ? -1.0 : (double)p95_ns / 1000.0;
-      double p99_us = (p99_ns==ULONG_MAX) ? -1.0 : (double)p99_ns / 1000.0;
+      ulong total       = cur->race_first[s] + cur->race_second[s] + cur->race_third[s];
+      ulong p95_2nd_ns  = FD_HISTF_BUCKET_CNT>0UL ? fd_histf_percentile( &cur->race_delay_second[s], 95U, ULONG_MAX ) : ULONG_MAX;
+      ulong p95_3rd_ns  = FD_HISTF_BUCKET_CNT>0UL ? fd_histf_percentile( &cur->race_delay_third [s], 95U, ULONG_MAX ) : ULONG_MAX;
+      double p95_2nd_us = (p95_2nd_ns==ULONG_MAX) ? -1.0 : (double)p95_2nd_ns / 1000.0;
+      double p95_3rd_us = (p95_3rd_ns==ULONG_MAX) ? -1.0 : (double)p95_3rd_ns / 1000.0;
 
       jsonp_open_object( gui->http, NULL );
-        jsonp_string( gui->http, "label",       label                  );
-        jsonp_ulong(  gui->http, "first",        cur->race_first [ s ] );
-        jsonp_ulong(  gui->http, "second",       cur->race_second[ s ] );
-        jsonp_ulong(  gui->http, "third",        cur->race_third [ s ] );
-        jsonp_ulong(  gui->http, "solo",         cur->race_solo  [ s ] );
-        jsonp_ulong(  gui->http, "total",        total                  );
-        jsonp_double( gui->http, "delay_p95_us", p95_us                 );
-        jsonp_double( gui->http, "delay_p99_us", p99_us                 );
+        jsonp_string( gui->http, "label",            label                  );
+        jsonp_ulong(  gui->http, "first",             cur->race_first [ s ] );
+        jsonp_ulong(  gui->http, "second",            cur->race_second[ s ] );
+        jsonp_ulong(  gui->http, "third",             cur->race_third [ s ] );
+        jsonp_ulong(  gui->http, "solo",              cur->race_solo  [ s ] );
+        jsonp_ulong(  gui->http, "total",             total                  );
+        jsonp_double( gui->http, "delay_2nd_p95_us",  p95_2nd_us             );
+        jsonp_double( gui->http, "delay_3rd_p95_us",  p95_3rd_us             );
       jsonp_close_object( gui->http );
     }
   jsonp_close_array( gui->http );

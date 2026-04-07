@@ -1198,34 +1198,64 @@ metric introduced.
     <counter name="RaceTurbineThird"    summary="Shreds where the turbine (unicast TVU) path arrived third or later" />
     <counter name="RaceTurbineSolo"     summary="Shreds delivered only by the turbine path (no other source delivered within the slot window)" />
 
-    <!-- Per-source delay histograms: nanoseconds behind the first arrival for non-first arrivals.
-         Range: 1µs (1000 ns) to 100ms (100_000_000 ns).  Same source order as counters above. -->
-    <histogram name="RaceMcastSrc0DelayNanos" min="1000" max="100000000" converter="none">
-      <summary>Nanoseconds behind first arrival for multicast source 0, when not first</summary>
+    <!-- Per-source delay histograms: nanoseconds behind the first arrival, split by placement.
+         Range: 1µs (1000 ns) to 100ms (100_000_000 ns).  Same source order as counters above.
+         Layout: pairs [DelaySecondNanos, DelayThirdNanos] per source, interleaved (stride=2 histograms).
+         C code indexes as: base_off + 2*src*(FD_HISTF_BUCKET_CNT+1) for second,
+                            base_off + (2*src+1)*(FD_HISTF_BUCKET_CNT+1) for third. -->
+    <histogram name="RaceMcastSrc0DelaySecondNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 0, when arriving second</summary>
     </histogram>
-    <histogram name="RaceMcastSrc1DelayNanos" min="1000" max="100000000" converter="none">
-      <summary>Nanoseconds behind first arrival for multicast source 1, when not first</summary>
+    <histogram name="RaceMcastSrc0DelayThirdNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 0, when arriving third or later</summary>
     </histogram>
-    <histogram name="RaceMcastSrc2DelayNanos" min="1000" max="100000000" converter="none">
-      <summary>Nanoseconds behind first arrival for multicast source 2, when not first</summary>
+    <histogram name="RaceMcastSrc1DelaySecondNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 1, when arriving second</summary>
     </histogram>
-    <histogram name="RaceMcastSrc3DelayNanos" min="1000" max="100000000" converter="none">
-      <summary>Nanoseconds behind first arrival for multicast source 3, when not first</summary>
+    <histogram name="RaceMcastSrc1DelayThirdNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 1, when arriving third or later</summary>
     </histogram>
-    <histogram name="RaceMcastSrc4DelayNanos" min="1000" max="100000000" converter="none">
-      <summary>Nanoseconds behind first arrival for multicast source 4, when not first</summary>
+    <histogram name="RaceMcastSrc2DelaySecondNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 2, when arriving second</summary>
     </histogram>
-    <histogram name="RaceMcastSrc5DelayNanos" min="1000" max="100000000" converter="none">
-      <summary>Nanoseconds behind first arrival for multicast source 5, when not first</summary>
+    <histogram name="RaceMcastSrc2DelayThirdNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 2, when arriving third or later</summary>
     </histogram>
-    <histogram name="RaceMcastSrc6DelayNanos" min="1000" max="100000000" converter="none">
-      <summary>Nanoseconds behind first arrival for multicast source 6, when not first</summary>
+    <histogram name="RaceMcastSrc3DelaySecondNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 3, when arriving second</summary>
     </histogram>
-    <histogram name="RaceMcastSrc7DelayNanos" min="1000" max="100000000" converter="none">
-      <summary>Nanoseconds behind first arrival for multicast source 7, when not first</summary>
+    <histogram name="RaceMcastSrc3DelayThirdNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 3, when arriving third or later</summary>
     </histogram>
-    <histogram name="RaceTurbineDelayNanos" min="1000" max="100000000" converter="none">
-      <summary>Nanoseconds behind first arrival for the turbine path, when not first</summary>
+    <histogram name="RaceMcastSrc4DelaySecondNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 4, when arriving second</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc4DelayThirdNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 4, when arriving third or later</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc5DelaySecondNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 5, when arriving second</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc5DelayThirdNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 5, when arriving third or later</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc6DelaySecondNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 6, when arriving second</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc6DelayThirdNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 6, when arriving third or later</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc7DelaySecondNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 7, when arriving second</summary>
+    </histogram>
+    <histogram name="RaceMcastSrc7DelayThirdNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for multicast source 7, when arriving third or later</summary>
+    </histogram>
+    <histogram name="RaceTurbineDelaySecondNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for the turbine path, when arriving second</summary>
+    </histogram>
+    <histogram name="RaceTurbineDelayThirdNanos" min="1000" max="100000000" converter="none">
+      <summary>Nanoseconds behind first arrival for the turbine path, when arriving third or later</summary>
     </histogram>
 </tile>
 

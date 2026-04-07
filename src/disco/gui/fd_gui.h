@@ -308,11 +308,12 @@ struct fd_gui_network_stats {
      Source indices: 0..FD_SHRED_MCAST_SRC_MAX-1 = mcast srcs, FD_SHRED_MCAST_SRC_MAX = turbine.
      Counters are cumulative; GUI computes deltas per sample interval.
      Histograms are snapshots of the cumulative histogram from tile metrics. */
-  ulong      race_first [ FD_SHRED_MCAST_SRC_MAX + 1 ];
-  ulong      race_second[ FD_SHRED_MCAST_SRC_MAX + 1 ];
-  ulong      race_third [ FD_SHRED_MCAST_SRC_MAX + 1 ];
-  ulong      race_solo  [ FD_SHRED_MCAST_SRC_MAX + 1 ];
-  fd_histf_t race_delay [ FD_SHRED_MCAST_SRC_MAX + 1 ];
+  ulong      race_first        [ FD_SHRED_MCAST_SRC_MAX + 1 ];
+  ulong      race_second       [ FD_SHRED_MCAST_SRC_MAX + 1 ];
+  ulong      race_third        [ FD_SHRED_MCAST_SRC_MAX + 1 ];
+  ulong      race_solo         [ FD_SHRED_MCAST_SRC_MAX + 1 ];
+  fd_histf_t race_delay_second [ FD_SHRED_MCAST_SRC_MAX + 1 ];  /* delay vs first, when 2nd */
+  fd_histf_t race_delay_third  [ FD_SHRED_MCAST_SRC_MAX + 1 ];  /* delay vs first, when 3rd+ */
 };
 
 typedef struct fd_gui_network_stats fd_gui_network_stats_t;

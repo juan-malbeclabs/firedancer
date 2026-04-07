@@ -146,14 +146,15 @@ typedef struct {
     fd_shred_race_entry_t tbl[ FD_SHRED_RACE_TBL_SZ ];
   } race[ FD_SHRED_MCAST_DEDUP_SLOT_CNT ];
 
-  /* Race placement counters and delay histograms.
+  /* Race placement counters and delay histograms (split by placement).
      Source index: 0..FD_SHRED_MCAST_SRC_MAX-1 = mcast; FD_SHRED_MCAST_SRC_MAX = turbine. */
   struct {
-    ulong      first [ FD_SHRED_RACE_SRC_CNT ];
-    ulong      second[ FD_SHRED_RACE_SRC_CNT ];
-    ulong      third [ FD_SHRED_RACE_SRC_CNT ];
-    ulong      solo  [ FD_SHRED_RACE_SRC_CNT ];
-    fd_histf_t delay [ FD_SHRED_RACE_SRC_CNT ];
+    ulong      first       [ FD_SHRED_RACE_SRC_CNT ];
+    ulong      second      [ FD_SHRED_RACE_SRC_CNT ];
+    ulong      third       [ FD_SHRED_RACE_SRC_CNT ];
+    ulong      solo        [ FD_SHRED_RACE_SRC_CNT ];
+    fd_histf_t delay_second[ FD_SHRED_RACE_SRC_CNT ];  /* delay vs first, when arriving 2nd */
+    fd_histf_t delay_third [ FD_SHRED_RACE_SRC_CNT ];  /* delay vs first, when arriving 3rd+ */
   } race_metrics;
 
   /* Signature verification support.
@@ -239,7 +240,8 @@ race_track_shred( fd_shred_mcast_ctx_t * ctx,
   long delay_ticks = ts - (long)e->ts_first;
   if( FD_LIKELY( delay_ticks>0L ) ) {
     ulong delay_ns = (ulong)( (double)delay_ticks / ctx->tick_per_ns );
-    fd_histf_sample( &ctx->race_metrics.delay[ source ], delay_ns );
+    if( prev_cnt==1U ) fd_histf_sample( &ctx->race_metrics.delay_second[ source ], delay_ns );
+    else               fd_histf_sample( &ctx->race_metrics.delay_third [ source ], delay_ns );
   }
 }
 
@@ -423,11 +425,14 @@ unprivileged_init( fd_topo_t *      topo,
                FD_SHRED_RACE_TBL_SZ * sizeof(fd_shred_race_entry_t) );
   }
 
-  /* Initialize race delay histograms */
+  /* Initialize race delay histograms (split: second and third placement) */
   for( ulong s=0UL; s<FD_SHRED_RACE_SRC_CNT; s++ ) {
-    fd_histf_join( fd_histf_new( &ctx->race_metrics.delay[ s ],
-                                 FD_MHIST_MIN( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_NANOS ),
-                                 FD_MHIST_MAX( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_NANOS ) ) );
+    fd_histf_join( fd_histf_new( &ctx->race_metrics.delay_second[ s ],
+                                 FD_MHIST_MIN( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_SECOND_NANOS ),
+                                 FD_MHIST_MAX( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_SECOND_NANOS ) ) );
+    fd_histf_join( fd_histf_new( &ctx->race_metrics.delay_third[ s ],
+                                 FD_MHIST_MIN( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_THIRD_NANOS ),
+                                 FD_MHIST_MAX( SHRED_MCAST, RACE_MCAST_SRC0_DELAY_THIRD_NANOS ) ) );
   }
 
   /* Set up input link workspaces */
@@ -798,14 +803,20 @@ metrics_write( fd_shred_mcast_ctx_t * ctx ) {
     fd_metrics_tl[ base + 3UL ] = ctx->race_metrics.solo  [ s ];
   }
 
-  /* Race delay histograms: stride (FD_HISTF_BUCKET_CNT+1) per source. */
+  /* Race delay histograms: pairs [second, third] per source, stride 2*(FD_HISTF_BUCKET_CNT+1). */
   for( ulong s=0UL; s<FD_SHRED_RACE_SRC_CNT; s++ ) {
-    ulong hist_base = FD_METRICS_HISTOGRAM_SHRED_MCAST_RACE_MCAST_SRC0_DELAY_NANOS_OFF
-                    + s * (FD_HISTF_BUCKET_CNT + 1UL);
-    fd_histf_t const * h = &ctx->race_metrics.delay[ s ];
+    ulong stride    = FD_HISTF_BUCKET_CNT + 1UL;
+    ulong hist_base = FD_METRICS_HISTOGRAM_SHRED_MCAST_RACE_MCAST_SRC0_DELAY_SECOND_NANOS_OFF
+                    + s * 2UL * stride;
+    fd_histf_t const * hs = &ctx->race_metrics.delay_second[ s ];
     for( ulong b=0UL; b<FD_HISTF_BUCKET_CNT; b++ )
-      fd_metrics_tl[ hist_base + b ] = h->counts[ b ];
-    fd_metrics_tl[ hist_base + FD_HISTF_BUCKET_CNT ] = h->sum;
+      fd_metrics_tl[ hist_base + b ] = hs->counts[ b ];
+    fd_metrics_tl[ hist_base + FD_HISTF_BUCKET_CNT ] = hs->sum;
+
+    fd_histf_t const * ht = &ctx->race_metrics.delay_third[ s ];
+    for( ulong b=0UL; b<FD_HISTF_BUCKET_CNT; b++ )
+      fd_metrics_tl[ hist_base + stride + b ] = ht->counts[ b ];
+    fd_metrics_tl[ hist_base + stride + FD_HISTF_BUCKET_CNT ] = ht->sum;
   }
 }
 

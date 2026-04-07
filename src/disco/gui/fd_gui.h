@@ -314,6 +314,13 @@ struct fd_gui_network_stats {
   ulong      race_solo         [ FD_SHRED_MCAST_SRC_MAX + 1 ];
   fd_histf_t race_delay_second [ FD_SHRED_MCAST_SRC_MAX + 1 ];  /* delay vs first, when 2nd */
   fd_histf_t race_delay_third  [ FD_SHRED_MCAST_SRC_MAX + 1 ];  /* delay vs first, when 3rd+ */
+
+  /* Epoch info from the most recent stake update received by the smcast tile.
+     stake_received==0 means the tile has not yet loaded epoch data (warmup). */
+  int   stake_received;
+  ulong stake_epoch;
+  ulong stake_start_slot;
+  ulong stake_slot_cnt;
 };
 
 typedef struct fd_gui_network_stats fd_gui_network_stats_t;

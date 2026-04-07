@@ -1257,6 +1257,13 @@ metric introduced.
     <histogram name="RaceTurbineDelayThirdNanos" min="1000" max="100000000" converter="none">
       <summary>Nanoseconds behind first arrival for the turbine path, when arriving third or later</summary>
     </histogram>
+
+    <!-- Epoch info from the most recent stake update.  Zero until the first
+         stake message is received (i.e. has_received_stake==0). -->
+    <gauge name="StakeEpoch"          summary="Epoch number from the most recent stake update received by the smcast tile." />
+    <gauge name="StakeEpochStartSlot" summary="First slot of the epoch from the most recent stake update." />
+    <gauge name="StakeEpochSlotCnt"   summary="Number of slots in the epoch from the most recent stake update." />
+    <gauge name="StakeReceived"       summary="1 after the first stake update has been received; 0 during startup warmup." />
 </tile>
 
 </metrics>

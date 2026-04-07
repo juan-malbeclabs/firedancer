@@ -1256,5 +1256,9 @@
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;mcast_&#8203;src7_&#8203;delay_&#8203;third_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for multicast source 7, when arriving third or later |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;turbine_&#8203;delay_&#8203;second_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for the turbine path, when arriving second |
 | <span class="metrics-name">shred_&#8203;mcast_&#8203;race_&#8203;turbine_&#8203;delay_&#8203;third_&#8203;nanos</span> | histogram | Nanoseconds behind first arrival for the turbine path, when arriving third or later |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;stake_&#8203;epoch</span> | gauge | Epoch number from the most recent stake update received by the smcast tile. |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;stake_&#8203;epoch_&#8203;start_&#8203;slot</span> | gauge | First slot of the epoch from the most recent stake update. |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;stake_&#8203;epoch_&#8203;slot_&#8203;cnt</span> | gauge | Number of slots in the epoch from the most recent stake update. |
+| <span class="metrics-name">shred_&#8203;mcast_&#8203;stake_&#8203;received</span> | gauge | 1 after the first stake update has been received; 0 during startup warmup. |
 
 </div>

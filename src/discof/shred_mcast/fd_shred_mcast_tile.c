@@ -160,12 +160,19 @@ typedef struct {
   /* Signature verification support.
      stake_ci provides leader schedule lookups (updated via replay_stake link).
      sha512 and bmtree_mem are scratch workspaces for ed25519 + Merkle root computation.
-     require_leader_sig: when 1, shreds whose epoch data is unavailable are dropped
-     (sig_failed++) instead of passed through.  Set in shred_relay mode. */
+     require_leader_sig: when 1, only enforce strict sig verification after the first
+     stake update is received (has_received_stake==1).  Set in shred_relay mode.
+     has_received_stake: set to 1 after the first stake update is finalized.
+     stake_epoch / stake_start_slot / stake_slot_cnt: epoch info from the most recent
+     stake update (used for GUI display).  Only valid when has_received_stake==1. */
   fd_stake_ci_t * stake_ci;
   fd_sha512_t   * sha512;
   void          * bmtree_mem;
   int             require_leader_sig;
+  int             has_received_stake;
+  ulong           stake_epoch;
+  ulong           stake_start_slot;
+  ulong           stake_slot_cnt;
 } fd_shred_mcast_ctx_t;
 
 /* Finalize race stats for the given ring slot before eviction.
@@ -486,16 +493,18 @@ unprivileged_init( fd_topo_t *      topo,
 
    Returns 1 if the signature is valid.
    Returns 0 if the signature is provably invalid, OR if epoch data is
-   unavailable AND ctx->require_leader_sig is set (shred_relay strict mode).
-   When epoch data is unavailable and require_leader_sig is 0, returns 1 to
-   allow pass-through (backwards-compatible relay startup behavior). */
+   unavailable AND strict verification is active (require_leader_sig==1 AND
+   has_received_stake==1).  Before the first stake update is received, shreds
+   pass through regardless of require_leader_sig (startup warmup, Option B). */
 static inline int
 fec_sigcheck( fd_shred_mcast_ctx_t * ctx,
               fd_shred_t const     * shred ) {
+  /* Strict mode = require_leader_sig set AND we've already loaded epoch data once */
+  int strict = ctx->require_leader_sig & ctx->has_received_stake;
   fd_epoch_leaders_t const * lsched = fd_stake_ci_get_lsched_for_slot( ctx->stake_ci, shred->slot );
-  if( FD_UNLIKELY( !lsched ) ) return !ctx->require_leader_sig;
+  if( FD_UNLIKELY( !lsched ) ) return !strict;
   fd_pubkey_t const * leader = fd_epoch_leaders_get( lsched, shred->slot );
-  if( FD_UNLIKELY( !leader ) ) return !ctx->require_leader_sig;
+  if( FD_UNLIKELY( !leader ) ) return !strict;
 
   uchar shred_type = fd_shred_type( shred->variant );
   /* Reject legacy shreds: they have no Merkle proof */
@@ -704,6 +713,13 @@ after_frag( fd_shred_mcast_ctx_t * ctx,
   if( FD_UNLIKELY( ctx->skip_frag==2 ) ) {
     /* Stake message: finalize the update started in during_frag */
     fd_stake_ci_stake_msg_fini( ctx->stake_ci );
+    /* Record epoch info for GUI and activate strict sig verification */
+    ulong ep = ctx->stake_ci->scratch[0].epoch;
+    fd_per_epoch_info_t const * ei = &ctx->stake_ci->epoch_info[ ep % 2UL ];
+    ctx->has_received_stake = 1;
+    ctx->stake_epoch      = ei->epoch;
+    ctx->stake_start_slot = ei->start_slot;
+    ctx->stake_slot_cnt   = ei->slot_cnt;
     (void)in_idx;
     return;
   }
@@ -823,6 +839,12 @@ metrics_write( fd_shred_mcast_ctx_t * ctx ) {
       fd_metrics_tl[ hist_base + stride + b ] = ht->counts[ b ];
     fd_metrics_tl[ hist_base + stride + FD_HISTF_BUCKET_CNT ] = ht->sum;
   }
+
+  /* Epoch info gauges */
+  fd_metrics_tl[ FD_METRICS_GAUGE_SHRED_MCAST_STAKE_RECEIVED_OFF       ] = (ulong)ctx->has_received_stake;
+  fd_metrics_tl[ FD_METRICS_GAUGE_SHRED_MCAST_STAKE_EPOCH_OFF          ] = ctx->stake_epoch;
+  fd_metrics_tl[ FD_METRICS_GAUGE_SHRED_MCAST_STAKE_EPOCH_START_SLOT_OFF ] = ctx->stake_start_slot;
+  fd_metrics_tl[ FD_METRICS_GAUGE_SHRED_MCAST_STAKE_EPOCH_SLOT_CNT_OFF ] = ctx->stake_slot_cnt;
 }
 
 #define STEM_BURST (FD_SHRED_MCAST_RX_BURST)

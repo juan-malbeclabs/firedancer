@@ -745,6 +745,14 @@ fd_gui_printf_network_metrics( fd_gui_t *                     gui,
       jsonp_close_object( gui->http );
     }
   jsonp_close_array( gui->http );
+
+  /* Epoch info from the smcast tile's most recent stake update. */
+  jsonp_open_object( gui->http, "smcast_epoch" );
+    jsonp_bool(  gui->http, "received",   cur->stake_received   );
+    jsonp_ulong( gui->http, "epoch",      cur->stake_epoch      );
+    jsonp_ulong( gui->http, "start_slot", cur->stake_start_slot );
+    jsonp_ulong( gui->http, "slot_cnt",   cur->stake_slot_cnt   );
+  jsonp_close_object( gui->http );
 }
 
 void

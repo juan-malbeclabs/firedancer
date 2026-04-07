@@ -486,6 +486,12 @@ fd_gui_network_stats_snap( fd_gui_t *               gui,
       for( ulong b=0UL; b<FD_HISTF_BUCKET_CNT; b++ )
         cur->race_delay_third[ s ].counts[ b ] = sm_met[ hist_base + stride + b ];
     }
+
+    /* Epoch info gauges */
+    cur->stake_received   = (int)sm_met[ FD_METRICS_GAUGE_SHRED_MCAST_STAKE_RECEIVED_OFF        ];
+    cur->stake_epoch      =      sm_met[ FD_METRICS_GAUGE_SHRED_MCAST_STAKE_EPOCH_OFF           ];
+    cur->stake_start_slot =      sm_met[ FD_METRICS_GAUGE_SHRED_MCAST_STAKE_EPOCH_START_SLOT_OFF ];
+    cur->stake_slot_cnt   =      sm_met[ FD_METRICS_GAUGE_SHRED_MCAST_STAKE_EPOCH_SLOT_CNT_OFF  ];
   }
 }
 

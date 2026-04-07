@@ -1497,8 +1497,12 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
       tile->shred_mcast.mcast_dst_ports[ i ] = dst_parsed.port;
     }
 
-    tile->shred_mcast.mcast_ttl     = (uchar)config->tiles.shred_mcast.mcast_ttl;
-    tile->shred_mcast.mcast_tx_sock = -1;
+    tile->shred_mcast.mcast_ttl           = (uchar)config->tiles.shred_mcast.mcast_ttl;
+    tile->shred_mcast.mcast_tx_sock       = -1;
+    /* In relay mode, snapin provides epoch stake data → sig verification is possible.
+       Enforce strict verification: shreds whose epoch data is unavailable are dropped
+       (sig_failed++) rather than passed through. */
+    tile->shred_mcast.require_leader_sig  = !strcmp( config->layout.mode, "shred_relay" ) ? 1 : 0;
 
   } else {
     FD_LOG_ERR(( "unknown tile name `%s`", tile->name ));

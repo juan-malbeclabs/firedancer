@@ -159,10 +159,13 @@ typedef struct {
 
   /* Signature verification support.
      stake_ci provides leader schedule lookups (updated via replay_stake link).
-     sha512 and bmtree_mem are scratch workspaces for ed25519 + Merkle root computation. */
+     sha512 and bmtree_mem are scratch workspaces for ed25519 + Merkle root computation.
+     require_leader_sig: when 1, shreds whose epoch data is unavailable are dropped
+     (sig_failed++) instead of passed through.  Set in shred_relay mode. */
   fd_stake_ci_t * stake_ci;
   fd_sha512_t   * sha512;
   void          * bmtree_mem;
+  int             require_leader_sig;
 } fd_shred_mcast_ctx_t;
 
 /* Finalize race stats for the given ring slot before eviction.
@@ -409,9 +412,10 @@ unprivileged_init( fd_topo_t *      topo,
   /* Initialize stake_ci with a null identity (smcast only needs leader schedule, not sdest routing) */
   fd_pubkey_t null_identity[1];
   fd_memset( null_identity, 0, sizeof(fd_pubkey_t) );
-  ctx->stake_ci   = fd_stake_ci_join( fd_stake_ci_new( _stake_ci, null_identity ) );
-  ctx->sha512     = fd_sha512_join( fd_sha512_new( _sha512 ) );
-  ctx->bmtree_mem = _bmtree;
+  ctx->stake_ci          = fd_stake_ci_join( fd_stake_ci_new( _stake_ci, null_identity ) );
+  ctx->sha512            = fd_sha512_join( fd_sha512_new( _sha512 ) );
+  ctx->bmtree_mem        = _bmtree;
+  ctx->require_leader_sig = tile->shred_mcast.require_leader_sig;
 
   /* Mark all dedup slots as unused */
   for( ulong i=0UL; i<FD_SHRED_MCAST_DEDUP_SLOT_CNT; i++ )
@@ -480,17 +484,18 @@ unprivileged_init( fd_topo_t *      topo,
    from an external multicast source.  Only called for the first shred of
    each FEC set (subsequent shreds reuse the cached fec_ok/fec_bad result).
 
-   Returns 1 if the signature is valid (or if no epoch data is available,
-   which is treated as relay mode and lets the shred pass through).
-   Returns 0 if the signature is provably invalid. */
+   Returns 1 if the signature is valid.
+   Returns 0 if the signature is provably invalid, OR if epoch data is
+   unavailable AND ctx->require_leader_sig is set (shred_relay strict mode).
+   When epoch data is unavailable and require_leader_sig is 0, returns 1 to
+   allow pass-through (backwards-compatible relay startup behavior). */
 static inline int
 fec_sigcheck( fd_shred_mcast_ctx_t * ctx,
               fd_shred_t const     * shred ) {
-  /* No epoch data → relay mode, skip verification */
   fd_epoch_leaders_t const * lsched = fd_stake_ci_get_lsched_for_slot( ctx->stake_ci, shred->slot );
-  if( FD_UNLIKELY( !lsched ) ) return 1;
+  if( FD_UNLIKELY( !lsched ) ) return !ctx->require_leader_sig;
   fd_pubkey_t const * leader = fd_epoch_leaders_get( lsched, shred->slot );
-  if( FD_UNLIKELY( !leader ) ) return 1;
+  if( FD_UNLIKELY( !leader ) ) return !ctx->require_leader_sig;
 
   uchar shred_type = fd_shred_type( shred->variant );
   /* Reject legacy shreds: they have no Merkle proof */

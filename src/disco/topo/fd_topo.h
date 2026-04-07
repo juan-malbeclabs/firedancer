@@ -538,6 +538,10 @@ struct fd_topo_tile {
       uint   mcast_dst_ips  [ FD_SHRED_MCAST_DST_MAX ]; /* network byte order */
       ushort mcast_dst_ports[ FD_SHRED_MCAST_DST_MAX ]; /* host byte order    */
       uchar  mcast_ttl;                                  /* IP_MULTICAST_TTL (0 = default 1) */
+      /* When 1, fec_sigcheck() drops shreds whose epoch data is unavailable
+         (returns 0 → sig_failed++) instead of passing them through.
+         Set to 1 in shred_relay mode so no unverified shred is ever forwarded. */
+      int    require_leader_sig;
 
       /* Set internally during privileged_init */
       int mcast_rx_socks[ FD_SHRED_MCAST_SRC_MAX ]; /* one socket per source group */

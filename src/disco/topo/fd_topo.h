@@ -27,7 +27,11 @@
 #define FD_NET_MAX_SRC_ADDR 4
 
 /* Maximum number of additional destinations for leader shreds and for retransmitted shreds */
-#define FD_TOPO_ADTL_DESTS_MAX ( 32UL)
+#define FD_TOPO_ADTL_DESTS_MAX  ( 32UL)
+
+/* Maximum number of multicast source groups (RX) and destination groups (TX) */
+#define FD_SHRED_MCAST_SRC_MAX  (  8UL)
+#define FD_SHRED_MCAST_DST_MAX  (  8UL)
 
 #define FD_TOPO_CORE_DUMP_LEVEL_DISABLED (0)
 #define FD_TOPO_CORE_DUMP_LEVEL_MINIMAL  (1)
@@ -126,6 +130,7 @@ typedef struct fd_topo_net_tile fd_topo_net_tile_t;
 struct fd_topo_tile {
   ulong id;                     /* The ID of this tile.  Indexed from [0, tile_cnt).  When placed in a topology, the ID must be the index of the tile in the tiles list. */
   char  name[ 7UL ];            /* The name of this tile.  There can be multiple of each tile name in a topology. */
+  char  metrics_name[ 13UL ];   /* The name of this tile for looking up metrics.  This is used so tiles can share a name but report different metrics, for Frankendancer and Firedancer. */
   ulong kind_id;                /* The ID of this tile within its name.  If there are n tile of a particular name, they have IDs [0, N).  The pair (name, kind_id) uniquely identifies a tile, as does "id" on its own. */
   int   is_agave;               /* If the tile needs to run in the Agave (Anza) address space or not. */
   int   allow_shutdown;         /* If the tile is allowed to shutdown gracefully.  If false, when the tile exits it will tear down the entire application. */
@@ -670,6 +675,20 @@ struct fd_topo_tile {
     struct {
       ulong accdb_max_depth;
     } resolv;
+
+    struct {
+      ulong  mcast_src_cnt;
+      uint   mcast_src_ips  [ FD_SHRED_MCAST_SRC_MAX ]; /* network byte order */
+      ushort mcast_src_ports[ FD_SHRED_MCAST_SRC_MAX ]; /* host byte order    */
+      char   mcast_src_names[ FD_SHRED_MCAST_SRC_MAX ][ 32 ]; /* optional human-readable name; empty string = use IP:port */
+      ulong  mcast_dst_cnt;
+      uint   mcast_dst_ips  [ FD_SHRED_MCAST_DST_MAX ]; /* network byte order */
+      ushort mcast_dst_ports[ FD_SHRED_MCAST_DST_MAX ]; /* host byte order    */
+      uchar  mcast_ttl;
+      int    mcast_tx_sock;
+      int    mcast_rx_socks[ FD_SHRED_MCAST_SRC_MAX ]; /* one socket per source group */
+      int    require_leader_sig; /* when 1, drop multicast shreds that fail Ed25519 leader sig verification */
+    } shred_mcast;
   };
 };
 

@@ -55,6 +55,8 @@ class Tile(Enum):
     BACKT = 105
     BENCHS = 106
 
+    SHRED_MCAST = 107
+
 class MetricType(Enum):
     COUNTER = 0
     GAUGE = 1

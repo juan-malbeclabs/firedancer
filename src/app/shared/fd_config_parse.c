@@ -291,6 +291,12 @@ fd_config_extract_pod( uchar *       pod,
     CFG_POP      ( ulong,   tiles.shredcap.write_buffer_size              );
   }
 
+  CFG_POP      ( bool,   tiles.shred_mcast.enabled                        );
+  CFG_POP_ARRAY( cstr,   tiles.shred_mcast.mcast_srcs                     );
+  CFG_POP_ARRAY( cstr,   tiles.shred_mcast.mcast_src_names                );
+  CFG_POP_ARRAY( cstr,   tiles.shred_mcast.mcast_dsts                     );
+  CFG_POP      ( uint,   tiles.shred_mcast.mcast_ttl                      );
+
   CFG_POP      ( bool,   development.sandbox                              );
   CFG_POP      ( bool,   development.no_clone                             );
   CFG_POP      ( cstr,   development.core_dump                            );

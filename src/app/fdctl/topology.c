@@ -1,5 +1,6 @@
 #include "../shared/fd_config.h"
 
+#include "../../ballet/shred/fd_shred.h"
 #include "../../disco/net/fd_net_tile.h"
 #include "../../disco/quic/fd_tpu.h"
 #include "../../disco/tiles.h"
@@ -321,6 +322,28 @@ fd_topo_initialize( config_t * config ) {
     }
   }
 
+  if( FD_UNLIKELY( config->tiles.shred_mcast.enabled ) ) {
+    fd_topob_wksp( topo, "shred_mcast" );
+    fd_topob_wksp( topo, "mcast_shred" );
+
+    /* One shred_mcast link per shred tile — each carries raw shred bytes (shred → shred_mcast) */
+    FOR(shred_tile_cnt) fd_topob_link( topo, "shred_mcast", "shred_mcast", 1024UL, FD_SHRED_MAX_SZ, 1UL );
+    /* One mcast_shred link per shred tile — shred_mcast forwards mcast-received shreds back to each shred tile */
+    FOR(shred_tile_cnt) fd_topob_link( topo, "mcast_shred", "mcast_shred", 1024UL, FD_SHRED_MAX_SZ, 1UL );
+
+    fd_topob_tile( topo, "smcast", "shred_mcast", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0, 0 );
+    strncpy( topo->tiles[ topo->tile_cnt-1UL ].metrics_name, "shred_mcast", 13UL );
+
+    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred",  i,    "shred_mcast", i );
+    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "smcast", 0UL, "metric_in", "shred_mcast", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+
+    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "smcast", 0UL, "mcast_shred", i );
+    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "shred",  i,   "metric_in", "mcast_shred", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+
+    /* stake_out already produced by Agave POH; smcast needs leader schedule for sig verification */
+    fd_topob_tile_in( topo, "smcast", 0UL, "metric_in", "stake_out", 0UL, FD_TOPOB_RELIABLE, FD_TOPOB_POLLED );
+  }
+
   if( FD_LIKELY( !is_auto_affinity ) ) {
     if( FD_UNLIKELY( affinity_tile_cnt<topo->tile_cnt ) )
       FD_LOG_ERR(( "The topology you are using has %lu tiles, but the CPU affinity specified in the config tile as [layout.affinity] only provides for %lu cores. "
@@ -559,6 +582,34 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     tile->gui.frontend_release_channel  = config->development.gui.frontend_release_channel_enum;
 
   } else if( FD_UNLIKELY( !strcmp( tile->name, "plugin" ) ) ) {
+
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "smcast" ) ) ) {
+    ulong src_cnt = config->tiles.shred_mcast.mcast_srcs_cnt;
+    if( FD_UNLIKELY( src_cnt>FD_SHRED_MCAST_SRC_MAX ) )
+      FD_LOG_ERR(( "tiles.shred_mcast.mcast_srcs: too many entries (max %lu)", FD_SHRED_MCAST_SRC_MAX ));
+    tile->shred_mcast.mcast_src_cnt = src_cnt;
+    for( ulong i=0UL; i<src_cnt; i++ ) {
+      fd_topo_ip_port_t src_parsed;
+      parse_ip_port( "tiles.shred_mcast.mcast_srcs", config->tiles.shred_mcast.mcast_srcs[ i ], &src_parsed );
+      tile->shred_mcast.mcast_src_ips  [ i ] = src_parsed.ip;
+      tile->shred_mcast.mcast_src_ports[ i ] = src_parsed.port;
+      tile->shred_mcast.mcast_rx_socks [ i ] = -1;
+      if( FD_LIKELY( i<config->tiles.shred_mcast.mcast_src_names_cnt ) )
+        fd_cstr_ncpy( tile->shred_mcast.mcast_src_names[ i ], config->tiles.shred_mcast.mcast_src_names[ i ],
+                      sizeof(tile->shred_mcast.mcast_src_names[ i ]) );
+    }
+    ulong dst_cnt = config->tiles.shred_mcast.mcast_dsts_cnt;
+    if( FD_UNLIKELY( dst_cnt>FD_SHRED_MCAST_DST_MAX ) )
+      FD_LOG_ERR(( "tiles.shred_mcast.mcast_dsts: too many entries (max %lu)", FD_SHRED_MCAST_DST_MAX ));
+    tile->shred_mcast.mcast_dst_cnt = dst_cnt;
+    for( ulong i=0UL; i<dst_cnt; i++ ) {
+      fd_topo_ip_port_t dst_parsed;
+      parse_ip_port( "tiles.shred_mcast.mcast_dsts", config->tiles.shred_mcast.mcast_dsts[ i ], &dst_parsed );
+      tile->shred_mcast.mcast_dst_ips  [ i ] = dst_parsed.ip;
+      tile->shred_mcast.mcast_dst_ports[ i ] = dst_parsed.port;
+    }
+    tile->shred_mcast.mcast_ttl     = (uchar)config->tiles.shred_mcast.mcast_ttl;
+    tile->shred_mcast.mcast_tx_sock = -1;
 
   } else {
     FD_LOG_ERR(( "unknown tile name %lu `%s`", tile->id, tile->name ));

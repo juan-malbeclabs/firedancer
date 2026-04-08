@@ -1443,6 +1443,28 @@ dynamic_port_range = "8900-9000"
         # slow clients but also increase memory usage.
         send_buffer_size_mb = 5120
 
+    # The shred_mcast tile receives shreds over IP multicast, deduplicates
+    # them against turbine shreds, and forwards the combined winner stream
+    # back to the shred tiles.  Disabled by default.
+    [tiles.shred_mcast]
+        enabled = false
+
+        # Multicast source groups to receive shreds from.
+        # Format: "A.B.C.D:PORT"
+        mcast_srcs = []
+
+        # Optional human-readable names for each mcast source, shown in
+        # the GUI instead of the IP:port.  If provided, must be the same
+        # length as mcast_srcs.
+        mcast_src_names = []
+
+        # Multicast destination groups to forward shreds to.
+        # Format: "A.B.C.D:PORT"
+        mcast_dsts = []
+
+        # IP_MULTICAST_TTL for outgoing multicast packets (0 = system default 1).
+        mcast_ttl = 1
+
 # These options can be useful for development, but should not be used
 # when connecting to a live cluster, as they may cause the validator to
 # be unstable or have degraded performance or security.  The program

@@ -508,6 +508,17 @@ struct fd_config {
       ulong write_buffer_size;
     } shredcap;
 
+    struct {
+      int    enabled;
+      ulong  mcast_srcs_cnt;
+      char   mcast_srcs     [ FD_SHRED_MCAST_SRC_MAX ][ IP4_PORT_STR_MAX ]; /* "A.B.C.D:PORT\0" source groups */
+      ulong  mcast_src_names_cnt;
+      char   mcast_src_names[ FD_SHRED_MCAST_SRC_MAX ][ 32 ];               /* optional human-readable name per source */
+      ulong  mcast_dsts_cnt;
+      char   mcast_dsts     [ FD_SHRED_MCAST_DST_MAX ][ IP4_PORT_STR_MAX ]; /* "A.B.C.D:PORT\0" dest groups */
+      uint   mcast_ttl;                                                       /* IP_MULTICAST_TTL (0 = default 1) */
+    } shred_mcast;
+
   } tiles;
   struct {
     ulong capture_start_slot;

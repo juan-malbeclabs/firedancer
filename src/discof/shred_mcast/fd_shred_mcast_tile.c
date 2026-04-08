@@ -449,7 +449,7 @@ unprivileged_init( fd_topo_t *      topo,
   /* Set up input link workspaces */
   for( ulong i=0UL; i<tile->in_cnt; i++ ) {
     fd_topo_link_t * link = &topo->links[ tile->in_link_id[ i ] ];
-    ctx->in_kind[ i ] = !strcmp( link->name, "replay_stake" ) ? IN_KIND_STAKE : IN_KIND_SHRED;
+    ctx->in_kind[ i ] = (!strcmp( link->name, "replay_stake" ) || !strcmp( link->name, "stake_out" )) ? IN_KIND_STAKE : IN_KIND_SHRED;
     fd_topo_wksp_t * wksp = &topo->workspaces[ topo->objs[ link->dcache_obj_id ].wksp_id ];
     ctx->in[ i ].mem    = wksp->wksp;
     ctx->in[ i ].chunk0 = fd_dcache_compact_chunk0( ctx->in[ i ].mem, link->dcache );
@@ -658,7 +658,7 @@ before_credit( fd_shred_mcast_ctx_t * ctx,
         uchar * dst = fd_chunk_to_laddr( ctx->out[ tile_idx ].mem, ctx->out[ tile_idx ].chunk );
         fd_memcpy( dst, raw, raw_sz );
         ulong out_sig = fd_disco_shred_out_shred_sig( 0, shred->slot, shred->fec_set_idx,
-                                                       is_code, shred->idx );
+                                                       shred->idx );
         ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
         fd_stem_publish( stem, ctx->out[ tile_idx ].out_idx, out_sig,
                          ctx->out[ tile_idx ].chunk, raw_sz, 0UL, tspub, tspub );
@@ -712,7 +712,7 @@ after_frag( fd_shred_mcast_ctx_t * ctx,
              fd_stem_context_t *    stem ) {
   if( FD_UNLIKELY( ctx->skip_frag==2 ) ) {
     /* Stake message: finalize the update started in during_frag */
-    fd_stake_ci_stake_msg_fini( ctx->stake_ci );
+    fd_stake_ci_stake_msg_fini_lsched_only( ctx->stake_ci );
     /* Record epoch info for GUI and activate strict sig verification */
     ulong ep = ctx->stake_ci->scratch[0].epoch;
     fd_per_epoch_info_t const * ei = &ctx->stake_ci->epoch_info[ ep % 2UL ];
@@ -776,7 +776,7 @@ after_frag( fd_shred_mcast_ctx_t * ctx,
     uchar * dst = fd_chunk_to_laddr( ctx->out[ tile_idx ].mem, ctx->out[ tile_idx ].chunk );
     fd_memcpy( dst, ctx->pkt_buf, ctx->pkt_sz );
     ulong out_sig = fd_disco_shred_out_shred_sig( 0, shred->slot, shred->fec_set_idx,
-                                                   is_code, shred->idx );
+                                                   shred->idx );
     ulong ts = fd_frag_meta_ts_comp( fd_tickcount() );
     fd_stem_publish( stem, ctx->out[ tile_idx ].out_idx, out_sig,
                      ctx->out[ tile_idx ].chunk, ctx->pkt_sz, 0UL, ts, ts );

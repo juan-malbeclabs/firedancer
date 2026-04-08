@@ -157,6 +157,11 @@ void * fd_stake_ci_delete( void          * mem  );
    be deleted from the list. */
 void                       fd_stake_ci_stake_msg_init( fd_stake_ci_t * info, fd_stake_weight_msg_t const * msg );
 void                       fd_stake_ci_stake_msg_fini( fd_stake_ci_t * info                                    );
+
+/* Like fd_stake_ci_stake_msg_fini but only rebuilds the epoch leader
+   schedule, skipping shred destination table construction.  Use this
+   for tiles that only need leader schedule lookups (e.g. smcast). */
+void fd_stake_ci_stake_msg_fini_lsched_only( fd_stake_ci_t * info );
 fd_shred_dest_weighted_t * fd_stake_ci_dest_add_init ( fd_stake_ci_t * info                                    );
 void                       fd_stake_ci_dest_add_fini ( fd_stake_ci_t * info, ulong                         cnt );
 

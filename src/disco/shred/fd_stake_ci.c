@@ -251,6 +251,27 @@ fd_stake_ci_stake_msg_fini( fd_stake_ci_t * info ) {
 }
 
 void
+fd_stake_ci_stake_msg_fini_lsched_only( fd_stake_ci_t * info ) {
+  ulong ep         = info->scratch->epoch;
+  ulong start_slot = info->scratch->start_slot;
+  ulong slot_cnt   = info->scratch->slot_cnt;
+  ulong staked_cnt = info->scratch->staked_cnt;
+  ulong excl_stake = info->scratch->excluded_stake;
+  ulong vote_keyed = info->scratch->vote_keyed_lsched;
+
+  fd_per_epoch_info_t * new_ei = info->epoch_info + (ep % 2UL);
+  fd_epoch_leaders_delete( fd_epoch_leaders_leave( new_ei->lsched ) );
+  new_ei->epoch             = ep;
+  new_ei->start_slot        = start_slot;
+  new_ei->slot_cnt          = slot_cnt;
+  new_ei->excluded_stake    = excl_stake;
+  new_ei->vote_keyed_lsched = vote_keyed;
+  new_ei->lsched            = fd_epoch_leaders_join( fd_epoch_leaders_new(
+      new_ei->_lsched, ep, start_slot, slot_cnt, staked_cnt,
+      info->vote_stake_weight, excl_stake, vote_keyed ) );
+}
+
+void
 fd_stake_ci_epoch_msg_fini( fd_stake_ci_t * info ) {
   fd_stake_ci_stake_msg_fini( info );
 }

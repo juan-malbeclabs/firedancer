@@ -41,6 +41,7 @@
 /* Input link kinds */
 #define IN_KIND_SHRED (0)
 #define IN_KIND_STAKE (1)
+#define IN_KIND_EPOCH (2) /* Firedancer: replay_epoch instead of stake_out */
 
 /* Race tracking: which source delivered each shred first?
    Sources: 0..FD_SHRED_MCAST_SRC_MAX-1 = mcast sockets; FD_SHRED_MCAST_SRC_MAX = turbine. */
@@ -449,7 +450,10 @@ unprivileged_init( fd_topo_t *      topo,
   /* Set up input link workspaces */
   for( ulong i=0UL; i<tile->in_cnt; i++ ) {
     fd_topo_link_t * link = &topo->links[ tile->in_link_id[ i ] ];
-    ctx->in_kind[ i ] = (!strcmp( link->name, "replay_stake" ) || !strcmp( link->name, "stake_out" )) ? IN_KIND_STAKE : IN_KIND_SHRED;
+    if( !strcmp( link->name, "replay_epoch" ) )           ctx->in_kind[ i ] = IN_KIND_EPOCH;
+    else if( !strcmp( link->name, "replay_stake" ) ||
+             !strcmp( link->name, "stake_out"    ) )      ctx->in_kind[ i ] = IN_KIND_STAKE;
+    else                                                  ctx->in_kind[ i ] = IN_KIND_SHRED;
     fd_topo_wksp_t * wksp = &topo->workspaces[ topo->objs[ link->dcache_obj_id ].wksp_id ];
     ctx->in[ i ].mem    = wksp->wksp;
     ctx->in[ i ].chunk0 = fd_dcache_compact_chunk0( ctx->in[ i ].mem, link->dcache );
@@ -691,6 +695,14 @@ during_frag( fd_shred_mcast_ctx_t * ctx,
     ctx->skip_frag = 2; /* sentinel: finalize stake in after_frag */
     return;
   }
+  if( FD_UNLIKELY( ctx->in_kind[ in_idx ]==IN_KIND_EPOCH ) ) {
+    if( FD_UNLIKELY( chunk<ctx->in[ in_idx ].chunk0 || chunk>ctx->in[ in_idx ].wmark ) )
+      FD_LOG_ERR(( "smcast: corrupt epoch chunk %lu not in [%lu,%lu]", chunk, ctx->in[ in_idx ].chunk0, ctx->in[ in_idx ].wmark ));
+    fd_epoch_info_msg_t const * epoch_msg = fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk );
+    fd_stake_ci_epoch_msg_init( ctx->stake_ci, epoch_msg );
+    ctx->skip_frag = 3; /* sentinel: finalize epoch in after_frag */
+    return;
+  }
   if( FD_UNLIKELY( sz > FD_SHRED_MAX_SZ ) ) { ctx->skip_frag = 1; return; }
   uchar const * src = fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk );
   fd_memcpy( ctx->pkt_buf, src, sz );
@@ -711,9 +723,20 @@ after_frag( fd_shred_mcast_ctx_t * ctx,
              ulong                  tspub   FD_PARAM_UNUSED,
              fd_stem_context_t *    stem ) {
   if( FD_UNLIKELY( ctx->skip_frag==2 ) ) {
-    /* Stake message: finalize the update started in during_frag */
+    /* Frankendancer: stake_out / replay_stake — finalize started in during_frag */
     fd_stake_ci_stake_msg_fini_lsched_only( ctx->stake_ci );
-    /* Record epoch info for GUI and activate strict sig verification */
+    ulong ep = ctx->stake_ci->scratch[0].epoch;
+    fd_per_epoch_info_t const * ei = &ctx->stake_ci->epoch_info[ ep % 2UL ];
+    ctx->has_received_stake = 1;
+    ctx->stake_epoch      = ei->epoch;
+    ctx->stake_start_slot = ei->start_slot;
+    ctx->stake_slot_cnt   = ei->slot_cnt;
+    (void)in_idx;
+    return;
+  }
+  if( FD_UNLIKELY( ctx->skip_frag==3 ) ) {
+    /* Firedancer: replay_epoch — finalize epoch leader schedule */
+    fd_stake_ci_stake_msg_fini_lsched_only( ctx->stake_ci );
     ulong ep = ctx->stake_ci->scratch[0].epoch;
     fd_per_epoch_info_t const * ei = &ctx->stake_ci->epoch_info[ ep % 2UL ];
     ctx->has_received_stake = 1;

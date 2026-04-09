@@ -999,6 +999,26 @@ fd_topo_initialize( config_t * config ) {
   FOR(shred_tile_cnt)    fd_topob_tile_in ( topo, "shred",   i,            "metric_in", "tower_out",     0UL,          FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
   FOR(shred_tile_cnt)    fd_topob_tile_out( topo, "shred",   i,                         "shred_net",     i                                                  );
 
+  if( FD_UNLIKELY( config->tiles.shred_mcast.enabled ) ) {
+    fd_topob_wksp( topo, "shred_mcast" );
+    fd_topob_wksp( topo, "mcast_shred" );
+
+    FOR(shred_tile_cnt) fd_topob_link( topo, "shred_mcast", "shred_mcast", 1024UL, FD_SHRED_MAX_SZ, 1UL );
+    FOR(shred_tile_cnt) fd_topob_link( topo, "mcast_shred", "mcast_shred", 1024UL, FD_SHRED_MAX_SZ, 1UL );
+
+    fd_topob_tile( topo, "smcast", "shred_mcast", "metric_in", tile_to_cpu[ topo->tile_cnt ], 0, 0, 0 );
+    strncpy( topo->tiles[ topo->tile_cnt-1UL ].metrics_name, "shred_mcast", 13UL );
+
+    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "shred",  i,    "shred_mcast", i );
+    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "smcast", 0UL, "metric_in", "shred_mcast", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+
+    FOR(shred_tile_cnt) fd_topob_tile_out( topo, "smcast", 0UL, "mcast_shred", i );
+    FOR(shred_tile_cnt) fd_topob_tile_in(  topo, "shred",  i,   "metric_in", "mcast_shred", i, FD_TOPOB_UNRELIABLE, FD_TOPOB_POLLED );
+
+    /* replay_epoch already produced by replay tile; smcast needs leader schedule for sig verification */
+    fd_topob_tile_in( topo, "smcast", 0UL, "metric_in", "replay_epoch", 0UL, FD_TOPOB_RELIABLE, FD_TOPOB_POLLED );
+  }
+
   if( FD_LIKELY( telemetry_enabled ) ) {
     fd_topob_wksp( topo, "event"      );
     fd_topob_wksp( topo, "event_sign" );
@@ -1802,6 +1822,34 @@ fd_topo_configure_tile( fd_topo_tile_t * tile,
     }
 
   } else if( FD_UNLIKELY( !strcmp( tile->name, "plugin" ) ) ) {
+
+  } else if( FD_UNLIKELY( !strcmp( tile->name, "smcast" ) ) ) {
+    ulong src_cnt = config->tiles.shred_mcast.mcast_srcs_cnt;
+    if( FD_UNLIKELY( src_cnt>FD_SHRED_MCAST_SRC_MAX ) )
+      FD_LOG_ERR(( "tiles.shred_mcast.mcast_srcs: too many entries (max %lu)", FD_SHRED_MCAST_SRC_MAX ));
+    tile->shred_mcast.mcast_src_cnt = src_cnt;
+    for( ulong i=0UL; i<src_cnt; i++ ) {
+      fd_topo_ip_port_t src_parsed;
+      parse_ip_port( "tiles.shred_mcast.mcast_srcs", config->tiles.shred_mcast.mcast_srcs[ i ], &src_parsed );
+      tile->shred_mcast.mcast_src_ips  [ i ] = src_parsed.ip;
+      tile->shred_mcast.mcast_src_ports[ i ] = src_parsed.port;
+      tile->shred_mcast.mcast_rx_socks [ i ] = -1;
+      if( FD_LIKELY( i<config->tiles.shred_mcast.mcast_src_names_cnt ) )
+        fd_cstr_ncpy( tile->shred_mcast.mcast_src_names[ i ], config->tiles.shred_mcast.mcast_src_names[ i ],
+                      sizeof(tile->shred_mcast.mcast_src_names[ i ]) );
+    }
+    ulong dst_cnt = config->tiles.shred_mcast.mcast_dsts_cnt;
+    if( FD_UNLIKELY( dst_cnt>FD_SHRED_MCAST_DST_MAX ) )
+      FD_LOG_ERR(( "tiles.shred_mcast.mcast_dsts: too many entries (max %lu)", FD_SHRED_MCAST_DST_MAX ));
+    tile->shred_mcast.mcast_dst_cnt = dst_cnt;
+    for( ulong i=0UL; i<dst_cnt; i++ ) {
+      fd_topo_ip_port_t dst_parsed;
+      parse_ip_port( "tiles.shred_mcast.mcast_dsts", config->tiles.shred_mcast.mcast_dsts[ i ], &dst_parsed );
+      tile->shred_mcast.mcast_dst_ips  [ i ] = dst_parsed.ip;
+      tile->shred_mcast.mcast_dst_ports[ i ] = dst_parsed.port;
+    }
+    tile->shred_mcast.mcast_ttl     = (uchar)config->tiles.shred_mcast.mcast_ttl;
+    tile->shred_mcast.mcast_tx_sock = -1;
 
   } else if( FD_UNLIKELY( !strcmp( tile->name, "diag" ) ) ) {
 

@@ -93,6 +93,7 @@
 #define IN_KIND_GOSSIP  ( 8UL)
 #define IN_KIND_ROOTED  ( 9UL)
 #define IN_KIND_ROOTEDH (10UL)
+#define IN_KIND_MCAST   (11UL)
 
 #define NET_OUT_IDX     1
 #define SIGN_OUT_IDX    2
@@ -428,6 +429,19 @@ during_frag( fd_shred_ctx_t * ctx,
 
     uchar const * dcache_entry = fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk );
     fd_memcpy( ctx->shred_buffer, dcache_entry, sz );
+    return;
+  }
+
+  if( FD_UNLIKELY( ctx->in_kind[ in_idx ]==IN_KIND_MCAST ) ) {
+    /* mcast_shred carries raw shred bytes — no IP/UDP header to strip.
+       smcast already round-robin'd this shred to the correct shred tile,
+       so no round-robin check is needed here. */
+    if( FD_UNLIKELY( chunk<ctx->in[ in_idx ].chunk0 || chunk>ctx->in[ in_idx ].wmark || sz>FD_SHRED_MAX_SZ ) )
+      FD_LOG_ERR(( "mcast_shred: corrupt chunk %lu sz %lu not in [%lu,%lu]",
+                   chunk, sz, ctx->in[ in_idx ].chunk0, ctx->in[ in_idx ].wmark ));
+    uchar const * dcache_entry = fd_chunk_to_laddr_const( ctx->in[ in_idx ].mem, chunk );
+    fd_memcpy( ctx->shred_buffer, dcache_entry, sz );
+    ctx->shred_buffer_sz = sz;
     return;
   }
 
@@ -906,6 +920,71 @@ after_frag( fd_shred_ctx_t *    ctx,
   }
   if( FD_UNLIKELY( ctx->in_kind[ in_idx ]==IN_KIND_REPAIR ) ) {
     return;
+  }
+
+  if( FD_UNLIKELY( ctx->in_kind[ in_idx ]==IN_KIND_MCAST ) ) {
+    uchar * shred_buffer    = ctx->shred_buffer;
+    ulong   shred_buffer_sz = ctx->shred_buffer_sz;
+
+    fd_shred_t const * shred = fd_shred_parse( shred_buffer, shred_buffer_sz );
+    if( FD_UNLIKELY( !shred       ) ) { ctx->metrics->shred_processing_result[ 1 ]++; return; }
+
+    fd_epoch_leaders_t const * lsched = fd_stake_ci_get_lsched_for_slot( ctx->stake_ci, shred->slot );
+    if( FD_UNLIKELY( !lsched      ) ) { ctx->metrics->shred_processing_result[ 0 ]++; return; }
+
+    fd_pubkey_t const * slot_leader = fd_epoch_leaders_get( lsched, shred->slot );
+    if( FD_UNLIKELY( !slot_leader ) ) { ctx->metrics->shred_processing_result[ 0 ]++; return; }
+
+    fd_fec_set_t const * out_fec_set[1];
+    fd_shred_t const   * out_shred[1];
+    fd_fec_resolver_spilled_t spilled_fec = { 0 };
+
+    long add_shred_timing = -fd_tickcount();
+    int rv = fd_fec_resolver_add_shred( ctx->resolver, shred, shred_buffer_sz,
+                                        0 /* from_repair */, slot_leader->uc,
+                                        out_fec_set, out_shred, &ctx->out_merkle_roots[0], &spilled_fec );
+    add_shred_timing += fd_tickcount();
+    fd_histf_sample( ctx->metrics->add_shred_timing, (ulong)add_shred_timing );
+    ctx->metrics->shred_processing_result[ rv + FD_FEC_RESOLVER_ADD_SHRED_RETVAL_OFF+FD_SHRED_ADD_SHRED_EXTRA_RETVAL_CNT ]++;
+
+    if( FD_UNLIKELY( ctx->shred_out_idx!=ULONG_MAX && spilled_fec.slot!=0 ) ) {
+      ulong sig_ = fd_disco_shred_out_shred_sig( 0, spilled_fec.slot, spilled_fec.fec_set_idx, FD_FEC_SHRED_CNT-1U );
+      ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
+      fd_stem_publish( stem, ctx->shred_out_idx, sig_, ctx->shred_out_chunk, 0, 0, ctx->tsorig, tspub );
+    }
+
+    /* No turbine relay — smcast already handles relay for mcast-received shreds. */
+
+    if( (rv==FD_FEC_RESOLVER_SHRED_OKAY) | (rv==FD_FEC_RESOLVER_SHRED_COMPLETES) | (rv==FD_FEC_RESOLVER_SHRED_DUPLICATE) ) {
+      if( FD_LIKELY( ctx->shred_out_idx!=ULONG_MAX ) ) {
+        int  is_code               = fd_shred_is_code( fd_shred_type( shred->variant ) );
+        uint shred_idx_or_data_cnt = shred->idx;
+        if( FD_LIKELY( is_code ) ) shred_idx_or_data_cnt = shred->code.data_cnt;
+        ulong _sig = fd_disco_shred_out_shred_sig( 1 /* DST_PROTO_SHRED */, shred->slot, shred->fec_set_idx, shred_idx_or_data_cnt );
+
+        ulong out_sz = fd_shred_header_sz( shred->variant );
+        fd_memcpy( fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk ), shred, out_sz );
+
+        fd_memcpy( (uchar *)fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk ) + out_sz, &ctx->out_merkle_roots[0], FD_SHRED_MERKLE_ROOT_SZ );
+        out_sz += FD_SHRED_MERKLE_ROOT_SZ;
+
+        fd_memcpy( (uchar *)fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk ) + out_sz, (uchar *)shred + fd_shred_chain_off( shred->variant ), FD_SHRED_MERKLE_ROOT_SZ );
+        out_sz += FD_SHRED_MERKLE_ROOT_SZ;
+
+        FD_STORE(uint, fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk ) + out_sz, UINT_MAX /* no nonce */ );
+        out_sz += 4UL;
+
+        ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
+        fd_stem_publish( stem, ctx->shred_out_idx, _sig, ctx->shred_out_chunk, out_sz, 0UL, ctx->tsorig, tspub );
+        ctx->shred_out_chunk = fd_dcache_compact_next( ctx->shred_out_chunk, out_sz, ctx->shred_out_chunk0, ctx->shred_out_wmark );
+      }
+    }
+    if( FD_LIKELY( rv!=FD_FEC_RESOLVER_SHRED_COMPLETES ) ) return;
+
+    FD_TEST( ctx->fec_sets <= *out_fec_set );
+    ctx->send_fec_set_idx[ 0UL ] = (ulong)(*out_fec_set - ctx->fec_sets);
+    ctx->send_fec_set_cnt = 1UL;
+    ctx->shredded_txn_cnt = 0UL;
   }
 
   ulong fanout = 200UL; /* Default Agave's DATA_PLANE_FANOUT = 200UL */
@@ -1392,6 +1471,7 @@ unprivileged_init( fd_topo_t *      topo,
       has_contact_info_in = 1;
     }
 
+    else if( FD_LIKELY( !strcmp( link->name, "mcast_shred"  ) ) )   ctx->in_kind[ i ] = IN_KIND_MCAST;
     else FD_LOG_ERR(( "shred tile has unexpected input link %lu %s", i, link->name ));
 
     if( FD_LIKELY( !!link->mtu ) ) {
